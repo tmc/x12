@@ -2,11 +2,6 @@
 
 package x12
 
-import (
-	"fmt"
-	"io"
-)
-
 type ID string
 
 // AN represents an alphanumeric field
@@ -49,8 +44,4 @@ type ISASegment struct {
 	AcknowledgementRequested          bool // ISA14 Acknowledgement Requested - Code indicating sender’s request for an interchange acknowledgment.
 	TestIndicator                     bool // ISA15 Test Indicator - Code indicating whether data enclosed by this interchange envelope is test, production or information. P - Production, T - Test.
 	ComponentElementSeparator         ID   // ISA16 Component Element Separator - The component element separator is a delimiter and not a data element; this field provides the delimiter used to separate component data elements within a composite data structure; this value must be different than the data element separator and the segment terminator.
-}
-
-func Decode(in io.Reader) (*X12Document, error) {
-	return nil, fmt.Errorf("not implemented")
 }
