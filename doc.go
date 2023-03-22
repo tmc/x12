@@ -2,14 +2,14 @@ package x12
 
 // X12Document is the root element of an X12 document.
 type X12Document struct {
-	Interchange Interchange
+	Interchange *Interchange
 }
 
 // Interchange is the envelope for an X12 interchange.
 type Interchange struct {
-	Header         ISA
-	FunctionGroups []FunctionGroup
-	Trailer        IEA
+	Header         *ISA
+	FunctionGroups []*FunctionGroup
+	Trailer        *IEA
 }
 
 // ISA is the Interchange Control Headera.
@@ -40,9 +40,9 @@ type IEA struct {
 
 // FunctionGroup is a group of transactions.
 type FunctionGroup struct {
-	Header       GS
-	Transactions []Transaction
-	Trailer      GE
+	Header       *GS
+	Transactions []*Transaction
+	Trailer      *GE
 }
 
 // GS is the Functional Group Header.
@@ -65,9 +65,9 @@ type GE struct {
 
 // Transaction is a single transaction.
 type Transaction struct {
-	Header   ST
+	Header   *ST
 	Segments []Segment
-	Trailer  SE
+	Trailer  *SE
 }
 
 // ST is the Transaction Set Header.
@@ -94,5 +94,5 @@ type Segment struct {
 type Element struct {
 	ID         string
 	Value      string
-	Components []string
+	Components []string `json:",omitempty"`
 }
