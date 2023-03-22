@@ -72,8 +72,9 @@ type Transaction struct {
 
 // ST is the Transaction Set Header.
 type ST struct {
-	TransactionSetIDCode        string
-	TransactionSetControlNumber string
+	TransactionSetIDCode              string
+	TransactionSetControlNumber       string
+	ImplementationConventionReference string
 }
 
 // SE is the Transaction Set Trailer.

@@ -65,7 +65,11 @@ IEA*1*000095071~`,
 							},
 							Transactions: []*x12.Transaction{
 								{
-									Header: &x12.ST{TransactionSetIDCode: "824", TransactionSetControlNumber: "02190001"},
+									Header: &x12.ST{
+										TransactionSetIDCode:              "824",
+										TransactionSetControlNumber:       "021390001",
+										ImplementationConventionReference: "005010X186A1",
+									},
 									Segments: []x12.Segment{
 										{
 											ID: "BGN",
@@ -110,12 +114,12 @@ IEA*1*000095071~`,
 											},
 										},
 									},
-									Trailer: &x12.SE{NumberOfIncludedSegments: "7", TransactionSetControlNumber: "21390001"},
+									Trailer: &x12.SE{NumberOfIncludedSegments: "7", TransactionSetControlNumber: "021390001"},
 								},
 							},
 							Trailer: &x12.GE{
 								NumberOfIncludedTransactionSets: "1",
-								GroupControlNumber:              "1",
+								GroupControlNumber:              "95071",
 							},
 						},
 					},
@@ -136,14 +140,22 @@ IEA*1*000095071~`,
 				t.Errorf("Decode() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			//if diff := cmp.Diff(tt.want, got); diff != "" {
-			if diff := cmp.Diff(tt.want.Interchange.FunctionGroups[0].Transactions[0].Segments, got.Interchange.FunctionGroups[0].Transactions[0].Segments); diff != "" {
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				//if diff := cmp.Diff(tt.want.Interchange.FunctionGroups[0].Transactions[0].Segments, got.Interchange.FunctionGroups[0].Transactions[0].Segments); diff != "" {
 				t.Errorf("Decode() mismatch (-want +got):\n%s", diff)
 			}
 			validateErr := fmt.Sprint(got.Validate())
-			// spew.Dump(got)
 			if validateErr != tt.validateResult {
 				t.Errorf("Validate() error = '%v', wantErr '%v'", validateErr, tt.validateResult)
+			}
+			encoded, err := (&x12.Marshaler{}).Marshal(got)
+			trimmedInput := strings.ReplaceAll(tt.input, "\n", "")
+			if err != nil {
+				t.Errorf("Marshal() error = %v", err)
+			}
+			// test round-tripping
+			if diff := cmp.Diff(trimmedInput, string(encoded)); diff != "" {
+				t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

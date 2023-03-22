@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tmc/x12"
 )
@@ -36,5 +37,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	_ = jsonOutput
+	m := &x12.Marshaler{}
+	b, err := m.Marshal(doc)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println(string(b))
+	fmt.Println(strings.ReplaceAll(sampleDoc, "\n", ""))
 	fmt.Println(string(jsonOutput))
 }

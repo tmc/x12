@@ -233,15 +233,21 @@ func parseGE(elements []string) (*GE, error) {
 		GroupControlNumber:              elements[2],
 	}, nil
 }
+
 func parseST(elements []string) (*ST, error) {
 	if len(elements) < 3 {
 		return nil, ErrMissingElement
 	}
-	return &ST{
+	r := &ST{
 		TransactionSetIDCode:        elements[1],
 		TransactionSetControlNumber: elements[2],
-	}, nil
+	}
+	if len(elements) > 3 {
+		r.ImplementationConventionReference = elements[3]
+	}
+	return r, nil
 }
+
 func parseSE(elements []string) (*SE, error) {
 	if len(elements) < 2 {
 		return nil, ErrMissingElement
