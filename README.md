@@ -8,6 +8,7 @@ x12 is a Go library for handling EDI x12 documents.
 
 - Decoding
 - Validation
+- Encoding (Marshaling)
 
 ## Contributing
 
