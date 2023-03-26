@@ -7,7 +7,7 @@ deps:
 	curl -s https://x12.org/examples > $@
 
 urls.txt: deps .index.html
-	cat .index.html | pup 'a attr{href}' | grep /examples/00 > $@
+	cat .index.html | pup 'a attr{href}' | grep /examples/005010 > $@
 
 .PHONY: testdata-x12
 testdata-x12: urls.txt

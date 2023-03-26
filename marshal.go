@@ -12,9 +12,20 @@ type Marshaler struct {
 
 func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
 	builder := strings.Builder{}
-	m.encodeISA(x.Interchange.Header, &builder)
-	m.encodeFunctionGroups(x.Interchange.FunctionGroups, &builder)
-	m.encodeIEA(x.Interchange.Trailer, &builder)
+	if !x.EnvelopeAutomaticallyAdded {
+		m.encodeISA(x.Interchange.Header, &builder)
+		m.encodeFunctionGroups(x.Interchange.FunctionGroups, &builder)
+		m.encodeIEA(x.Interchange.Trailer, &builder)
+	} else {
+		// TODO: check that there is exactly one function group and one transaction
+		fg := x.Interchange.FunctionGroups[0]
+		transaction := fg.Transactions[0]
+		m.encodeST(transaction.Header, &builder)
+		for _, segment := range transaction.Segments {
+			m.encodeSegment(segment, &builder)
+		}
+		m.encodeSE(transaction.Trailer, &builder)
+	}
 	return []byte(builder.String()), nil
 }
 

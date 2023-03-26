@@ -3,6 +3,10 @@ package x12
 // X12Document is the root element of an X12 document.
 type X12Document struct {
 	Interchange *Interchange
+
+	// EnvelopeAutomaticallyAdded is true if the envelope was automatically added to a decoded document.
+	// This may be the case if the document was decoded from a file that did not contain an ISA/IEA envelope.
+	EnvelopeAutomaticallyAdded bool
 }
 
 // Interchange is the envelope for an X12 interchange.

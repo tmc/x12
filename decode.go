@@ -22,113 +22,123 @@ var (
 	ErrInvalidFormat  = errors.New("invalid format")
 )
 
+type decodeState struct {
+	doc                  *X12Document
+	lineIndex            int
+	currentFunctionGroup *FunctionGroup
+	currentTransaction   *Transaction
+
+	withRelaxedSegmentIDWhitespace bool
+}
+
+// DecodeOption is a function that can be used to configure the decoder.
+type DecodeOption func(*decodeState)
+
+// WithRelaxedSegmentIDWhitespace allows the decoder to accept segment IDs with leading and trailing whitespace.
+func WithRelaxedSegmentIDWhitespace() DecodeOption {
+	return func(state *decodeState) {
+		state.withRelaxedSegmentIDWhitespace = true
+	}
+}
+
 // Decode decodes an X12 document from an io.Reader
-func Decode(in io.Reader) (*X12Document, error) {
+func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
+
+	state := &decodeState{
+		doc: &X12Document{
+			Interchange: &Interchange{},
+		},
+		lineIndex:            0,
+		currentFunctionGroup: nil,
+		currentTransaction:   nil,
+	}
+	for _, opt := range opts {
+		opt(state)
+	}
+
 	scanner := bufio.NewScanner(in)
 	scanner.Split(scanEDI)
 
-	doc := &X12Document{
-		Interchange: &Interchange{},
-	}
-	var currentFunctionGroup *FunctionGroup
-	var currentTransaction *Transaction
-
 	for scanner.Scan() {
-		segment := strings.TrimSpace(scanner.Text())
+		state.lineIndex++
+		text := scanner.Text()
+		segment := strings.Trim(text, "\r\n")
+		if segment == "" {
+			continue
+		}
 		elements := strings.Split(segment, ElementSeparator)
 		segmentID := elements[0]
+		if state.withRelaxedSegmentIDWhitespace {
+			segmentID = strings.TrimSpace(segmentID)
+		}
 		switch segmentID {
 		case "ISA":
 			header, err := parseISA(elements)
 			if err != nil {
 				return nil, err
 			}
-			doc.Interchange.Header = header
+			state.doc.Interchange.Header = header
 		case "IEA":
 			trailer, err := parseIEA(elements)
 			if err != nil {
 				return nil, err
 			}
-			doc.Interchange.Trailer = trailer
+			state.doc.Interchange.Trailer = trailer
 		case "GS":
 			header, err := parseGS(elements)
 			if err != nil {
 				return nil, err
 			}
-			currentFunctionGroup = &FunctionGroup{
+			state.currentFunctionGroup = &FunctionGroup{
 				Header: header,
 			}
-			doc.Interchange.FunctionGroups = append(doc.Interchange.FunctionGroups, currentFunctionGroup)
+			state.doc.Interchange.FunctionGroups = append(state.doc.Interchange.FunctionGroups, state.currentFunctionGroup)
 		case "GE":
-			if currentFunctionGroup == nil {
-				return nil, fmt.Errorf("%w: GE segment without GS segment", ErrInvalidFormat)
+			if state.currentFunctionGroup == nil {
+				return nil, state.Errorf("%w: GE segment without GS segment", ErrInvalidFormat)
 			}
 			trailer, err := parseGE(elements)
 			if err != nil {
-				return nil, fmt.Errorf("%w: issue parsing GE segment", err)
+				return nil, state.Errorf("%w: issue parsing GE segment", err)
 			}
-			currentFunctionGroup.Trailer = trailer
+			state.currentFunctionGroup.Trailer = trailer
 		case "ST":
-			// If we haven't yet seen an ISA header or a GS header, then presume that this is a single transaction and create a default interchange and function group.
-
-			if doc.Interchange.Header == nil && currentFunctionGroup == nil {
-				doc.Interchange.Header = &ISA{
-					InterchangeControlNumber:  "000000001",
-					ComponentElementSeparator: ElementSeparator,
-				}
-
-				doc.Interchange.Trailer = &IEA{
-					NumberOfIncludedFunctionalGroups: "1",
-					InterchangeControlNumber:         "000000001",
-				}
-
-				currentFunctionGroup = &FunctionGroup{
-					Header: &GS{
-						GroupControlNumber: "000000001",
-					},
-					Trailer: &GE{
-						NumberOfIncludedTransactionSets: "1",
-						GroupControlNumber:              "000000001",
-					},
-				}
-
-			}
-
-			if currentFunctionGroup == nil {
-				return nil, fmt.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
+			state.considerAutomaticEnvelope()
+			if state.currentFunctionGroup == nil {
+				return nil, state.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
 			}
 			header, err := parseST(elements)
 			if err != nil {
 				return nil, err
 			}
-			currentTransaction = &Transaction{
+			state.currentTransaction = &Transaction{
 				Header: header,
 			}
-			currentFunctionGroup.Transactions = append(currentFunctionGroup.Transactions, currentTransaction)
+			state.currentFunctionGroup.Transactions = append(state.currentFunctionGroup.Transactions, state.currentTransaction)
 		case "SE":
-			if currentTransaction == nil {
-				return nil, fmt.Errorf("%w: SE segment without ST segment", ErrInvalidFormat)
+			if state.currentTransaction == nil {
+				return nil, state.Errorf("%w: SE segment without ST segment", ErrInvalidFormat)
 			}
 			trailer, err := parseSE(elements)
 			if err != nil {
 				return nil, err
 			}
-			currentTransaction.Trailer = trailer
+			state.currentTransaction.Trailer = trailer
 		default:
-			if currentTransaction == nil {
-				return nil, fmt.Errorf("%w: %v segment without ST segment", ErrInvalidFormat, segmentID)
+			if state.currentTransaction == nil {
+				return nil, state.Errorf("%w: '%v' segment without ST segment", ErrInvalidFormat, segmentID)
 			}
 			segment, err := parseSegment(segmentID, elements[1:])
 			if err != nil {
-				return nil, fmt.Errorf("issue parsing segment %v: %w", segmentID, err)
+				return nil, state.Errorf("issue parsing segment %v: %w", segmentID, err)
 			}
-			currentTransaction.Segments = append(currentTransaction.Segments, segment)
+			state.currentTransaction.Segments = append(state.currentTransaction.Segments, segment)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	return doc, nil
+	return state.doc, nil
 }
 
 // Validate validates the x12 document
@@ -300,4 +310,41 @@ func parseElements(elements []string) []Element {
 		}
 	}
 	return parsedElements
+
+}
+
+// considerAutomaticEnvelope adds an ISA, IEA, GS, and GE envelope to the document if one is not present.
+func (s *decodeState) considerAutomaticEnvelope() {
+	shouldAdd := s.lineIndex == 1 && s.currentFunctionGroup == nil && s.currentTransaction == nil
+	if !shouldAdd {
+		return
+	}
+
+	s.doc.EnvelopeAutomaticallyAdded = true
+	s.doc.Interchange.Header = &ISA{
+		InterchangeControlNumber:  "000000001",
+		ComponentElementSeparator: ElementSeparator,
+	}
+
+	s.doc.Interchange.Trailer = &IEA{
+		NumberOfIncludedFunctionalGroups: "1",
+		InterchangeControlNumber:         "000000001",
+	}
+
+	s.currentFunctionGroup = &FunctionGroup{
+		Header: &GS{
+			GroupControlNumber: "000000001",
+		},
+		Trailer: &GE{
+			NumberOfIncludedTransactionSets: "1",
+			GroupControlNumber:              "000000001",
+		},
+	}
+	s.doc.Interchange.FunctionGroups = append(s.doc.Interchange.FunctionGroups, s.currentFunctionGroup)
+}
+
+// Errorf sets the error field of the decodeState to the given error.
+func (s *decodeState) Errorf(format string, args ...any) error {
+	format = fmt.Sprintf("line %d: %s", s.lineIndex, format)
+	return fmt.Errorf(format, args...)
 }
