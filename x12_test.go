@@ -2,6 +2,9 @@ package x12_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -161,18 +164,45 @@ IEA*1*000095071~`,
 	}
 }
 
-
-
-func Foo() {
-
-	readyCh := make(chan struct{})
-	go func() {
-		// wait till something else happens...
-		// then do shit..
-		<-readyCh
+func TestRoundtripping(t *testing.T) {
+	// run through all *.edi files in the testdata directory and make sure we can decode and encode them without error.
+	files, err := ioutil.ReadDir("testdata")
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".edi") {
+			continue
+		}
+		t.Run(file.Name(), func(t *testing.T) {
+			f, err := os.Open(filepath.Join("testdata", file.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			edi, err := x12.Decode(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := (&x12.Marshaler{}).Marshal(edi)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// compare the original file to the encoded file
 
-	time.Sleep(time.Second)
-	close(readyCh)
+			// read the original file
+			f.Seek(0, 0)
+			original, err := ioutil.ReadAll(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// compare the original file to the encoded file
+			if diff := cmp.Diff(string(original), string(encoded)); diff != "" {
+				t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+			}
+
+		})
+	}
 
 }

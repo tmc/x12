@@ -69,6 +69,31 @@ func Decode(in io.Reader) (*X12Document, error) {
 			}
 			currentFunctionGroup.Trailer = trailer
 		case "ST":
+			// If we haven't yet seen an ISA header or a GS header, then presume that this is a single transaction and create a default interchange and function group.
+
+			if doc.Interchange.Header == nil && currentFunctionGroup == nil {
+				doc.Interchange.Header = &ISA{
+					InterchangeControlNumber:  "000000001",
+					ComponentElementSeparator: ElementSeparator,
+				}
+
+				doc.Interchange.Trailer = &IEA{
+					NumberOfIncludedFunctionalGroups: "1",
+					InterchangeControlNumber:         "000000001",
+				}
+
+				currentFunctionGroup = &FunctionGroup{
+					Header: &GS{
+						GroupControlNumber: "000000001",
+					},
+					Trailer: &GE{
+						NumberOfIncludedTransactionSets: "1",
+						GroupControlNumber:              "000000001",
+					},
+				}
+
+			}
+
 			if currentFunctionGroup == nil {
 				return nil, fmt.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
 			}
