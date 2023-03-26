@@ -2,10 +2,14 @@ package x12_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/tmc/x12"
 )
 
@@ -159,4 +163,72 @@ IEA*1*000095071~`,
 			}
 		})
 	}
+}
+
+func TestRoundtripping(t *testing.T) {
+	// run through all *.edi files in the testdata directory and make sure we can decode and encode them without error.
+
+	// x12.org includes a number of examples that have whitespace after the ISA segment ID, which is technically invalid.
+	// we can relax this requirement by passing WithRelaxedSegmentIDWhitespace() to the decoder.
+	optMap := map[string]struct {
+		RelaxedWhitespace bool
+	}{
+		"005010x221-example-5a.edi": {RelaxedWhitespace: true},
+		"005010x221-example-5b.edi": {RelaxedWhitespace: true},
+		"005010x221-example-5c.edi": {RelaxedWhitespace: true},
+		"005010x221-example-8a-claim-submitted-incorrect-subscriber-patient-and-incorrect-id.edi": {RelaxedWhitespace: true},
+		"005010x221-example-8b-claim-submitted-incorrect-subscriber-name-and-id.edi":              {RelaxedWhitespace: true},
+		"005010x221-example-8c-claim-submitted-subscriber-missing-middle-initial.edi":             {RelaxedWhitespace: true},
+	}
+	files, err := ioutil.ReadDir("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".edi") {
+			continue
+		}
+		t.Run(file.Name(), func(t *testing.T) {
+			f, err := os.Open(filepath.Join("testdata", file.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			opts := []x12.DecodeOption{}
+			if optMap[file.Name()].RelaxedWhitespace {
+				opts = append(opts, x12.WithRelaxedSegmentIDWhitespace())
+			}
+			edi, err := x12.Decode(f, opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := (&x12.Marshaler{
+				NewLines: true,
+			}).Marshal(edi)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// compare the original file to the encoded file
+
+			// read the original file
+			f.Seek(0, 0)
+			original, err := ioutil.ReadAll(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := []cmp.Option{}
+			if optMap[file.Name()].RelaxedWhitespace {
+				cmpOpts = append(cmpOpts, cmpopts.AcyclicTransformer("TrimSegmentSpaces", func(in string) string {
+					return strings.ReplaceAll(in, "ISA ", "ISA")
+				}))
+			}
+			// compare the original file to the encoded file
+			if diff := cmp.Diff(string(original), string(encoded), cmpOpts...); diff != "" {
+				t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+			}
+
+		})
+	}
+
 }
