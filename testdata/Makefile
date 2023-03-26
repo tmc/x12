@@ -1,6 +1,7 @@
 .PHONY: deps
 deps:
 	command -v pup > /dev/null || go install github.com/ericchiang/pup@latest
+	command -v jq > /dev/null || brew install jq
 
 .index.html:
 	curl -s https://x12.org/examples > $@

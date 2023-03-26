@@ -5,7 +5,7 @@ for url in $(cat urls.txt); do
 	for eurl in $c1; do
 		for eeurl in $(curl -s https://x12.org$eurl |pup '.examples-list-item a attr{href}'); do
 			dest=$(basename $url)-$(basename $eeurl).edi
-			curl -s https://x12.org$eeurl | pup -p 'p.data text{}' | tr -d '\n'> $dest
+			curl -s https://x12.org$eeurl | pup -p 'p.data json{}' |jq -r '.[].text'> $dest
 		done
 	done
 done

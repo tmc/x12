@@ -160,3 +160,19 @@ IEA*1*000095071~`,
 		})
 	}
 }
+
+
+
+func Foo() {
+
+	readyCh := make(chan struct{})
+	go func() {
+		// wait till something else happens...
+		// then do shit..
+		<-readyCh
+	}
+
+	time.Sleep(time.Second)
+	close(readyCh)
+
+}
