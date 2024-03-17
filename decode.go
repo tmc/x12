@@ -209,7 +209,7 @@ func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
 }
 
 func parseISA(elements []string) (*ISA, error) {
-	if len(elements) < 16 {
+	if len(elements) < 17 {
 		fmt.Println("elements", elements)
 		return nil, fmt.Errorf("ISA: %w", ErrMissingElement)
 	}
