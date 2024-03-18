@@ -161,7 +161,7 @@ IEA*1*000095071~`,
 				t.Errorf("Decode() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if err != nil {
+			if (err != nil) == tt.wantErr {
 				return
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
