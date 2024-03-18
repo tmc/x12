@@ -1,6 +1,9 @@
 package x12
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type Marshaler struct {
 	SegmentSeparator    string
@@ -11,6 +14,9 @@ type Marshaler struct {
 }
 
 func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
+	if x == nil {
+		return nil, fmt.Errorf("%w: x nil", ErrInvalidArgument)
+	}
 	builder := strings.Builder{}
 	if !x.EnvelopeAutomaticallyAdded {
 		m.encodeISA(x.Interchange.Header, &builder)

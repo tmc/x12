@@ -18,8 +18,9 @@ const (
 )
 
 var (
-	ErrMissingElement = errors.New("missing element")
-	ErrInvalidFormat  = errors.New("invalid format")
+	ErrMissingElement  = errors.New("missing element")
+	ErrInvalidFormat   = errors.New("invalid format")
+	ErrInvalidArgument = errors.New("invalid argument")
 )
 
 type decodeState struct {
@@ -143,6 +144,9 @@ func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
 
 // Validate validates the x12 document
 func (doc *X12Document) Validate() error {
+	if doc == nil {
+		return fmt.Errorf("%w: doc nil", ErrInvalidArgument)
+	}
 	if doc.Interchange == nil {
 		return fmt.Errorf("%w: missing interchange", ErrInvalidFormat)
 	}
@@ -209,8 +213,7 @@ func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
 }
 
 func parseISA(elements []string) (*ISA, error) {
-	if len(elements) < 16 {
-		fmt.Println("elements", elements)
+	if len(elements) < 17 {
 		return nil, fmt.Errorf("ISA: %w", ErrMissingElement)
 	}
 	return &ISA{
