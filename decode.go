@@ -44,19 +44,7 @@ func WithRelaxedSegmentIDWhitespace() DecodeOption {
 
 // Decode decodes an X12 document from an io.Reader
 func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
-
-	state := &decodeState{
-		doc: &X12Document{
-			Interchange: &Interchange{},
-		},
-		lineIndex:            0,
-		currentFunctionGroup: nil,
-		currentTransaction:   nil,
-	}
-	for _, opt := range opts {
-		opt(state)
-	}
-
+	state := initializeDecodeState(opts)
 	scanner := bufio.NewScanner(in)
 	scanner.Split(scanEDI)
 
@@ -74,72 +62,54 @@ func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
 		}
 		switch segmentID {
 		case "ISA":
-			header, err := parseISA(elements)
-			if err != nil {
+			if err := state.parseISA(elements); err != nil {
 				return nil, err
 			}
-			state.doc.Interchange.Header = header
 		case "IEA":
-			trailer, err := parseIEA(elements)
-			if err != nil {
+			if err := state.parseIEA(elements); err != nil {
 				return nil, err
 			}
-			state.doc.Interchange.Trailer = trailer
 		case "GS":
-			header, err := parseGS(elements)
-			if err != nil {
+			if err := state.parseGS(elements); err != nil {
 				return nil, err
 			}
-			state.currentFunctionGroup = &FunctionGroup{
-				Header: header,
-			}
-			state.doc.Interchange.FunctionGroups = append(state.doc.Interchange.FunctionGroups, state.currentFunctionGroup)
 		case "GE":
-			if state.currentFunctionGroup == nil {
-				return nil, state.Errorf("%w: GE segment without GS segment", ErrInvalidFormat)
+			if err := state.parseGE(elements); err != nil {
+				return nil, err
 			}
-			trailer, err := parseGE(elements)
-			if err != nil {
-				return nil, state.Errorf("%w: issue parsing GE segment", err)
-			}
-			state.currentFunctionGroup.Trailer = trailer
 		case "ST":
-			state.considerAutomaticEnvelope()
-			if state.currentFunctionGroup == nil {
-				return nil, state.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
-			}
-			header, err := parseST(elements)
-			if err != nil {
+			if err := state.parseST(elements); err != nil {
 				return nil, err
 			}
-			state.currentTransaction = &Transaction{
-				Header: header,
-			}
-			state.currentFunctionGroup.Transactions = append(state.currentFunctionGroup.Transactions, state.currentTransaction)
 		case "SE":
-			if state.currentTransaction == nil {
-				return nil, state.Errorf("%w: SE segment without ST segment", ErrInvalidFormat)
-			}
-			trailer, err := parseSE(elements)
-			if err != nil {
+			if err := state.parseSE(elements); err != nil {
 				return nil, err
 			}
-			state.currentTransaction.Trailer = trailer
 		default:
-			if state.currentTransaction == nil {
-				return nil, state.Errorf("%w: '%v' segment without ST segment", ErrInvalidFormat, segmentID)
+			if err := state.parseSegment(segmentID, elements[1:]); err != nil {
+				return nil, err
 			}
-			segment, err := parseSegment(segmentID, elements[1:])
-			if err != nil {
-				return nil, state.Errorf("issue parsing segment %v: %w", segmentID, err)
-			}
-			state.currentTransaction.Segments = append(state.currentTransaction.Segments, segment)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 	return state.doc, nil
+}
+
+func initializeDecodeState(opts []DecodeOption) *decodeState {
+	state := &decodeState{
+		doc: &X12Document{
+			Interchange: &Interchange{},
+		},
+		lineIndex:            0,
+		currentFunctionGroup: nil,
+		currentTransaction:   nil,
+	}
+	for _, opt := range opts {
+		opt(state)
+	}
+	return state
 }
 
 // Validate validates the x12 document
@@ -212,11 +182,11 @@ func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, nil, nil
 }
 
-func parseISA(elements []string) (*ISA, error) {
+func (s *decodeState) parseISA(elements []string) error {
 	if len(elements) < 17 {
-		return nil, fmt.Errorf("ISA: %w", ErrMissingElement)
+		return s.Errorf("ISA: %w", ErrMissingElement)
 	}
-	return &ISA{
+	s.doc.Interchange.Header = &ISA{
 		AuthorizationInfoQualifier:     elements[1],
 		AuthorizationInformation:       elements[2],
 		SecurityInfoQualifier:          elements[3],
@@ -233,75 +203,100 @@ func parseISA(elements []string) (*ISA, error) {
 		AcknowledgmentRequested:        elements[14],
 		UsageIndicator:                 elements[15],
 		ComponentElementSeparator:      elements[16],
-	}, nil
+	}
+	return nil
 }
 
-func parseIEA(elements []string) (*IEA, error) {
-	if len(elements) < 2 {
-		return nil, ErrMissingElement
+func (s *decodeState) parseIEA(elements []string) error {
+	if len(elements) < 3 {
+		return s.Errorf("IEA: %w", ErrMissingElement)
 	}
-	return &IEA{
+	s.doc.Interchange.Trailer = &IEA{
 		NumberOfIncludedFunctionalGroups: elements[1],
 		InterchangeControlNumber:         elements[2],
-	}, nil
+	}
+	return nil
 }
 
-func parseGS(elements []string) (*GS, error) {
-	if len(elements) < 8 {
-		return nil, ErrMissingElement
+func (s *decodeState) parseGS(elements []string) error {
+	if len(elements) < 9 {
+		return s.Errorf("GS: %w", ErrMissingElement)
 	}
-	return &GS{
-		FunctionalIDCode:         elements[1],
-		ApplicationSenderCode:    elements[2],
-		ApplicationReceiverCode:  elements[3],
-		Date:                     elements[4],
-		Time:                     elements[5],
-		GroupControlNumber:       elements[6],
-		ResponsibleAgencyCode:    elements[7],
-		VersionReleaseIndustryID: elements[8],
-	}, nil
+	s.currentFunctionGroup = &FunctionGroup{
+		Header: &GS{
+			FunctionalIDCode:         elements[1],
+			ApplicationSenderCode:    elements[2],
+			ApplicationReceiverCode:  elements[3],
+			Date:                     elements[4],
+			Time:                     elements[5],
+			GroupControlNumber:       elements[6],
+			ResponsibleAgencyCode:    elements[7],
+			VersionReleaseIndustryID: elements[8],
+		},
+	}
+	s.doc.Interchange.FunctionGroups = append(s.doc.Interchange.FunctionGroups, s.currentFunctionGroup)
+	return nil
 }
 
-func parseGE(elements []string) (*GE, error) {
-	if len(elements) < 2 {
-		return nil, ErrMissingElement
+func (s *decodeState) parseGE(elements []string) error {
+	if s.currentFunctionGroup == nil {
+		return s.Errorf("%w: GE segment without GS segment", ErrInvalidFormat)
 	}
-	return &GE{
+	if len(elements) < 3 {
+		return s.Errorf("GE: %w", ErrMissingElement)
+	}
+	s.currentFunctionGroup.Trailer = &GE{
 		NumberOfIncludedTransactionSets: elements[1],
 		GroupControlNumber:              elements[2],
-	}, nil
+	}
+	return nil
 }
 
-func parseST(elements []string) (*ST, error) {
-	if len(elements) < 3 {
-		return nil, ErrMissingElement
+func (s *decodeState) parseST(elements []string) error {
+	s.considerAutomaticEnvelope()
+	if s.currentFunctionGroup == nil {
+		return s.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
 	}
-	r := &ST{
-		TransactionSetIDCode:        elements[1],
-		TransactionSetControlNumber: elements[2],
+	if len(elements) < 3 {
+		return s.Errorf("ST: %w", ErrMissingElement)
+	}
+	s.currentTransaction = &Transaction{
+		Header: &ST{
+			TransactionSetIDCode:        elements[1],
+			TransactionSetControlNumber: elements[2],
+		},
 	}
 	if len(elements) > 3 {
-		r.ImplementationConventionReference = elements[3]
+		s.currentTransaction.Header.ImplementationConventionReference = elements[3]
 	}
-	return r, nil
+	s.currentFunctionGroup.Transactions = append(s.currentFunctionGroup.Transactions, s.currentTransaction)
+	return nil
 }
 
-func parseSE(elements []string) (*SE, error) {
-	if len(elements) < 2 {
-		return nil, ErrMissingElement
+func (s *decodeState) parseSE(elements []string) error {
+	if s.currentTransaction == nil {
+		return s.Errorf("%w: SE segment without ST segment", ErrInvalidFormat)
 	}
-	return &SE{
+	if len(elements) < 3 {
+		return s.Errorf("SE: %w", ErrMissingElement)
+	}
+	s.currentTransaction.Trailer = &SE{
 		NumberOfIncludedSegments:    elements[1],
 		TransactionSetControlNumber: elements[2],
-	}, nil
+	}
+	return nil
 }
 
-func parseSegment(segmentID string, elements []string) (Segment, error) {
+func (s *decodeState) parseSegment(segmentID string, elements []string) error {
+	if s.currentTransaction == nil {
+		return s.Errorf("%w: '%v' segment without ST segment", ErrInvalidFormat, segmentID)
+	}
 	segment := Segment{
 		ID: segmentID,
 	}
 	segment.Elements = parseElements(elements)
-	return segment, nil
+	s.currentTransaction.Segments = append(s.currentTransaction.Segments, segment)
+	return nil
 }
 
 func parseElements(elements []string) []Element {
