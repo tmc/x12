@@ -2,7 +2,7 @@ package x12_test
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,7 +200,7 @@ func TestRoundtripping(t *testing.T) {
 		"005010x221-example-8b-claim-submitted-incorrect-subscriber-name-and-id.edi":              {RelaxedWhitespace: true},
 		"005010x221-example-8c-claim-submitted-subscriber-missing-middle-initial.edi":             {RelaxedWhitespace: true},
 	}
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestRoundtripping(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer f.Close()
-			opts := []x12.DecodeOption{}
+			var opts []x12.DecodeOption
 			if optMap[file.Name()].RelaxedWhitespace {
 				opts = append(opts, x12.WithRelaxedSegmentIDWhitespace())
 			}
@@ -232,7 +232,7 @@ func TestRoundtripping(t *testing.T) {
 
 			// read the original file
 			f.Seek(0, 0)
-			original, err := ioutil.ReadAll(f)
+			original, err := io.ReadAll(f)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -244,11 +244,15 @@ func TestRoundtripping(t *testing.T) {
 				}))
 			}
 			// compare the original file to the encoded file
-			if diff := cmp.Diff(string(original), string(encoded), cmpOpts...); diff != "" {
+			if diff := cmp.Diff(normalizeLineEndings(string(original)), normalizeLineEndings(string(encoded)), cmpOpts...); diff != "" {
 				t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 			}
 
 		})
 	}
 
+}
+
+func normalizeLineEndings(input string) string {
+	return strings.ReplaceAll(input, "\r\n", "\n")
 }
