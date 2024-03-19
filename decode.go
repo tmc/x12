@@ -15,6 +15,8 @@ const (
 	ElementSeparator = "*"
 	// SubElementSeparator is the character that separates sub-elements.
 	SubElementSeparator = ":"
+	// When encountering an unknown segment use this parser
+	defaultParser = "DEFAULT"
 )
 
 var (
@@ -45,52 +47,16 @@ func WithRelaxedSegmentIDWhitespace() DecodeOption {
 // Decode decodes an X12 document from an io.Reader
 func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
 	state := initializeDecodeState(opts)
+	segmentParsers := state.getSegmentParsers()
+
 	scanner := bufio.NewScanner(in)
 	scanner.Split(scanEDI)
-
 	for scanner.Scan() {
-		state.lineIndex++
-		text := scanner.Text()
-		segment := strings.Trim(text, "\r\n")
-		if segment == "" {
-			continue
-		}
-		elements := strings.Split(segment, ElementSeparator)
-		segmentID := elements[0]
-		if state.withRelaxedSegmentIDWhitespace {
-			segmentID = strings.TrimSpace(segmentID)
-		}
-		switch segmentID {
-		case "ISA":
-			if err := state.parseISA(elements); err != nil {
-				return nil, err
-			}
-		case "IEA":
-			if err := state.parseIEA(elements); err != nil {
-				return nil, err
-			}
-		case "GS":
-			if err := state.parseGS(elements); err != nil {
-				return nil, err
-			}
-		case "GE":
-			if err := state.parseGE(elements); err != nil {
-				return nil, err
-			}
-		case "ST":
-			if err := state.parseST(elements); err != nil {
-				return nil, err
-			}
-		case "SE":
-			if err := state.parseSE(elements); err != nil {
-				return nil, err
-			}
-		default:
-			if err := state.parseSegment(segmentID, elements[1:]); err != nil {
-				return nil, err
-			}
+		if err := state.processLine(scanner.Text(), segmentParsers); err != nil {
+			return nil, err
 		}
 	}
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
@@ -110,6 +76,44 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 		opt(state)
 	}
 	return state
+}
+
+// scanEDI is a bufio.SplitFunc that splits an EDI document into segments
+func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	if i := strings.Index(string(data), SegmentSeparator); i >= 0 {
+		// We have a full segment
+		return i + 1, data[0:i], nil
+	}
+
+	// If we're at EOF, we have a final, non-empty, non-terminated segment. Return it.
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	// Request more data.
+	return 0, nil, nil
+}
+
+func (s *decodeState) processLine(line string, parsers map[string]segmentParser) error {
+	s.lineIndex++
+	segment := strings.Trim(line, "\r\n")
+	if segment == "" {
+		return nil
+	}
+
+	elements := strings.Split(segment, ElementSeparator)
+	segmentID, _ := s.extractSegmentID(elements)
+
+	parseFunc, exists := parsers[segmentID]
+	if !exists {
+		parseFunc = parsers[defaultParser]
+	}
+
+	return parseFunc(s, elements)
 }
 
 // Validate validates the x12 document
@@ -162,24 +166,19 @@ func (doc *X12Document) Validate() error {
 	return nil
 }
 
-// scanEDI is a bufio.SplitFunc that splits an EDI document into segments
-func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
+type segmentParser func(s *decodeState, elements []string) error
 
-	if i := strings.Index(string(data), SegmentSeparator); i >= 0 {
-		// We have a full segment
-		return i + 1, data[0:i], nil
+// Not currently using the decodeState, but we may return different parsers on specific conditions in the future.
+func (s *decodeState) getSegmentParsers() map[string]segmentParser {
+	return map[string]segmentParser{
+		"ISA":     (*decodeState).parseISA,
+		"IEA":     (*decodeState).parseIEA,
+		"GS":      (*decodeState).parseGS,
+		"GE":      (*decodeState).parseGE,
+		"ST":      (*decodeState).parseST,
+		"SE":      (*decodeState).parseSE,
+		"DEFAULT": (*decodeState).parseSegment,
 	}
-
-	// If we're at EOF, we have a final, non-empty, non-terminated segment. Return it.
-	if atEOF {
-		return len(data), data, nil
-	}
-
-	// Request more data.
-	return 0, nil, nil
 }
 
 func (s *decodeState) parseISA(elements []string) error {
@@ -253,12 +252,12 @@ func (s *decodeState) parseGE(elements []string) error {
 }
 
 func (s *decodeState) parseST(elements []string) error {
+	if len(elements) < 3 {
+		return s.Errorf("ST: %w", ErrMissingElement)
+	}
 	s.considerAutomaticEnvelope()
 	if s.currentFunctionGroup == nil {
 		return s.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
-	}
-	if len(elements) < 3 {
-		return s.Errorf("ST: %w", ErrMissingElement)
 	}
 	s.currentTransaction = &Transaction{
 		Header: &ST{
@@ -287,14 +286,15 @@ func (s *decodeState) parseSE(elements []string) error {
 	return nil
 }
 
-func (s *decodeState) parseSegment(segmentID string, elements []string) error {
+func (s *decodeState) parseSegment(elements []string) error {
+	segmentID, elements := s.extractSegmentID(elements)
 	if s.currentTransaction == nil {
 		return s.Errorf("%w: '%v' segment without ST segment", ErrInvalidFormat, segmentID)
 	}
 	segment := Segment{
-		ID: segmentID,
+		ID:       segmentID,
+		Elements: parseElements(elements),
 	}
-	segment.Elements = parseElements(elements)
 	s.currentTransaction.Segments = append(s.currentTransaction.Segments, segment)
 	return nil
 }
@@ -309,6 +309,14 @@ func parseElements(elements []string) []Element {
 	}
 	return parsedElements
 
+}
+
+func (s *decodeState) extractSegmentID(elements []string) (string, []string) {
+	segmentID := elements[0]
+	if s.withRelaxedSegmentIDWhitespace {
+		segmentID = strings.TrimSpace(segmentID)
+	}
+	return segmentID, elements[1:]
 }
 
 // considerAutomaticEnvelope adds an ISA, IEA, GS, and GE envelope to the document if one is not present.
