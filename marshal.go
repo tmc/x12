@@ -36,28 +36,27 @@ func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
 }
 
 func (m *Marshaler) ss() string {
-	ss := m.SegmentSeparator
-	if ss == "" {
-		ss = "~"
+	if m.SegmentSeparator == "" {
+		m.SegmentSeparator = SegmentSeparator
 	}
 	if m.NewLines {
-		return ss + "\n"
+		return m.SegmentSeparator + "\n"
 	}
-	return ss
+	return m.SegmentSeparator
 }
 
 func (m *Marshaler) es() string {
 	if m.ElementSeparator == "" {
-		return "*"
+		m.ElementSeparator = ElementSeparator
 	}
-	return m.es()
+	return m.ElementSeparator
 }
 
 func (m *Marshaler) ses() string {
 	if m.SubElementSeparator == "" {
-		return ":"
+		m.SubElementSeparator = SubElementSeparator
 	}
-	return m.ses()
+	return m.SubElementSeparator
 }
 
 func (m *Marshaler) encodeISA(h *ISA, builder *strings.Builder) {
