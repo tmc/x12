@@ -2,7 +2,7 @@ package x12_test
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,7 +200,7 @@ func TestRoundtripping(t *testing.T) {
 		"005010x221-example-8b-claim-submitted-incorrect-subscriber-name-and-id.edi":              {RelaxedWhitespace: true},
 		"005010x221-example-8c-claim-submitted-subscriber-missing-middle-initial.edi":             {RelaxedWhitespace: true},
 	}
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestRoundtripping(t *testing.T) {
 
 			// read the original file
 			f.Seek(0, 0)
-			original, err := ioutil.ReadAll(f)
+			original, err := io.ReadAll(f)
 			if err != nil {
 				t.Fatal(err)
 			}
