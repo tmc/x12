@@ -214,7 +214,7 @@ func TestRoundtripping(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer f.Close()
-			opts := []x12.DecodeOption{}
+			var opts []x12.DecodeOption
 			if optMap[file.Name()].RelaxedWhitespace {
 				opts = append(opts, x12.WithRelaxedSegmentIDWhitespace())
 			}
@@ -244,11 +244,15 @@ func TestRoundtripping(t *testing.T) {
 				}))
 			}
 			// compare the original file to the encoded file
-			if diff := cmp.Diff(string(original), string(encoded), cmpOpts...); diff != "" {
+			if diff := cmp.Diff(normalizeLineEndings(string(original)), normalizeLineEndings(string(encoded)), cmpOpts...); diff != "" {
 				t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 			}
 
 		})
 	}
 
+}
+
+func normalizeLineEndings(input string) string {
+	return strings.ReplaceAll(input, "\r\n", "\n")
 }
