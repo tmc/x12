@@ -218,6 +218,9 @@ func (s *decodeState) parseIEA(elements []string) error {
 }
 
 func (s *decodeState) parseGS(elements []string) error {
+	if s.doc.Interchange.Header == nil {
+		return s.Errorf("%w: GS segment without ISA segment", ErrInvalidFormat)
+	}
 	if len(elements) < 9 {
 		return s.Errorf("GS: %w", ErrMissingElement)
 	}
