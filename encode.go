@@ -98,10 +98,11 @@ func (enc *Encoder) Encode(doc *Document) error {
 		newlines:           enc.newlines,
 	}
 	if doc.EnvelopeAutomaticallyAdded {
-		if len(doc.Interchange.FunctionGroups) != 1 || len(doc.Interchange.FunctionGroups[0].Transactions) != 1 {
+		groups := doc.Interchange.FunctionGroups
+		if len(groups) != 1 || groups[0] == nil || len(groups[0].Transactions) != 1 {
 			return fmt.Errorf("%w: automatically enveloped document must contain exactly one function group with one transaction", ErrInvalidArgument)
 		}
-		return state.encodeTransaction(doc.Interchange.FunctionGroups[0].Transactions[0])
+		return state.encodeTransaction(groups[0].Transactions[0])
 	}
 	if doc.Interchange.Header == nil {
 		return fmt.Errorf("%w: ISA segment missing", ErrInvalidFormat)
@@ -142,6 +143,9 @@ func isa16(doc *Document) string {
 }
 
 func (state *encodeState) encodeFunctionGroup(group *FunctionGroup) error {
+	if group == nil {
+		return fmt.Errorf("%w: nil function group", ErrInvalidFormat)
+	}
 	if group.Header == nil {
 		return fmt.Errorf("%w: GS segment missing", ErrInvalidFormat)
 	}
@@ -160,6 +164,9 @@ func (state *encodeState) encodeFunctionGroup(group *FunctionGroup) error {
 }
 
 func (state *encodeState) encodeTransaction(transaction *Transaction) error {
+	if transaction == nil {
+		return fmt.Errorf("%w: nil transaction", ErrInvalidFormat)
+	}
 	if transaction.Header == nil {
 		return fmt.Errorf("%w: ST segment missing", ErrInvalidFormat)
 	}

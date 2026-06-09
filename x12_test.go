@@ -639,3 +639,37 @@ func TestDecodeLargeSegment(t *testing.T) {
 		t.Errorf("Decode(2MB segment) error = %v, want bufio.ErrTooLong", err)
 	}
 }
+
+func TestMarshalAndValidateNilEntries(t *testing.T) {
+	// Nil pointers inside the slices must produce errors, not panics.
+	docs := map[string]*x12.Document{
+		"nil function group": {Interchange: &x12.Interchange{
+			Header:         &x12.ISA{},
+			FunctionGroups: []*x12.FunctionGroup{nil},
+			Trailer:        &x12.IEA{FunctionalGroupCount: "1"},
+		}},
+		"nil transaction": {Interchange: &x12.Interchange{
+			Header: &x12.ISA{},
+			FunctionGroups: []*x12.FunctionGroup{{
+				Header:       &x12.GS{},
+				Transactions: []*x12.Transaction{nil},
+				Trailer:      &x12.GE{TransactionSetCount: "1"},
+			}},
+			Trailer: &x12.IEA{FunctionalGroupCount: "1"},
+		}},
+		"automatic envelope nil function group": {
+			EnvelopeAutomaticallyAdded: true,
+			Interchange:                &x12.Interchange{FunctionGroups: []*x12.FunctionGroup{nil}},
+		},
+	}
+	for name, doc := range docs {
+		t.Run(name, func(t *testing.T) {
+			if _, err := x12.Marshal(doc); err == nil {
+				t.Error("Marshal() error = nil, want error")
+			}
+			if err := doc.Validate(); err == nil {
+				t.Error("Validate() error = nil, want error")
+			}
+		})
+	}
+}

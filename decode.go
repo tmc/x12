@@ -345,6 +345,9 @@ func (doc *Document) Validate() error {
 
 	// check that the GS and GE segments are present and match
 	for _, functionGroup := range doc.Interchange.FunctionGroups {
+		if functionGroup == nil {
+			return fmt.Errorf("%w: nil function group", ErrInvalidFormat)
+		}
 		if functionGroup.Header == nil {
 			return fmt.Errorf("%w: GS segment missing", ErrInvalidFormat)
 		}
@@ -362,6 +365,9 @@ func (doc *Document) Validate() error {
 	// check that the ST and SE segments are present and match
 	for _, functionGroup := range doc.Interchange.FunctionGroups {
 		for _, transaction := range functionGroup.Transactions {
+			if transaction == nil {
+				return fmt.Errorf("%w: nil transaction", ErrInvalidFormat)
+			}
 			if transaction.Header == nil {
 				return fmt.Errorf("%w: ST segment missing", ErrInvalidFormat)
 			}
