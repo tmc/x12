@@ -39,7 +39,8 @@ func WithElementSeparator(s string) EncodeOption {
 
 // WithComponentSeparator sets the component element separator used when
 // encoding composite elements, overriding the document's ISA16. The
-// default is DefaultComponentSeparator.
+// emitted ISA16 element declares this separator, keeping the output
+// self-describing. The default is DefaultComponentSeparator.
 func WithComponentSeparator(s string) EncodeOption {
 	return func(enc *Encoder) { enc.componentSeparator = s }
 }
@@ -75,7 +76,10 @@ type encodeState struct {
 	segmentTerminator  string
 	elementSeparator   string
 	componentSeparator string
-	newlines           bool
+	// isa16Override, when set, replaces the ISA16 element so the output
+	// declares the component separator actually used.
+	isa16Override string
+	newlines      bool
 }
 
 // Encode writes the X12 encoding of doc to the encoder's writer.
@@ -95,6 +99,7 @@ func (enc *Encoder) Encode(doc *Document) error {
 		segmentTerminator:  resolve(enc.segmentTerminator, doc.SegmentTerminator, DefaultSegmentTerminator),
 		elementSeparator:   resolve(enc.elementSeparator, doc.ElementSeparator, DefaultElementSeparator),
 		componentSeparator: resolve(enc.componentSeparator, isa16(doc), DefaultComponentSeparator),
+		isa16Override:      enc.componentSeparator,
 		newlines:           enc.newlines,
 	}
 	if doc.EnvelopeAutomaticallyAdded {
@@ -185,6 +190,10 @@ func (state *encodeState) encodeTransaction(transaction *Transaction) error {
 }
 
 func (state *encodeState) encodeISA(h *ISA) error {
+	isa16 := h.ComponentElementSeparator
+	if state.isa16Override != "" {
+		isa16 = state.isa16Override
+	}
 	return state.writeSegment([]string{
 		"ISA",
 		h.AuthorizationInfoQualifier,
@@ -202,7 +211,7 @@ func (state *encodeState) encodeISA(h *ISA) error {
 		h.ControlNumber,
 		h.AcknowledgmentRequested,
 		h.UsageIndicator,
-		h.ComponentElementSeparator,
+		isa16,
 	})
 }
 

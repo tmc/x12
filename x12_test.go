@@ -673,3 +673,67 @@ func TestMarshalAndValidateNilEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestMarshalDelimiterPrecedence(t *testing.T) {
+	doc := func() *x12.Document {
+		return &x12.Document{
+			SegmentTerminator: "\n",
+			ElementSeparator:  "|",
+			Interchange: &x12.Interchange{
+				Header: &x12.ISA{ComponentElementSeparator: ">"},
+				FunctionGroups: []*x12.FunctionGroup{{
+					Header: &x12.GS{},
+					Transactions: []*x12.Transaction{{
+						Header: &x12.ST{IDCode: "837", ControlNumber: "1"},
+						Segments: []x12.Segment{
+							{ID: "HI", Elements: []x12.Element{{Value: "BK", Components: []string{"8901"}}}},
+						},
+						Trailer: &x12.SE{SegmentCount: "3", ControlNumber: "1"},
+					}},
+					Trailer: &x12.GE{TransactionSetCount: "1", ControlNumber: "1"},
+				}},
+				Trailer: &x12.IEA{FunctionalGroupCount: "1", ControlNumber: "1"},
+			},
+		}
+	}
+
+	// Document delimiters win when no options are given; composite
+	// elements join on the document's ISA16.
+	b, err := x12.Marshal(doc())
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if !strings.Contains(string(b), "HI|BK>8901\n") {
+		t.Errorf("Marshal() = %q, want document delimiters (HI|BK>8901)", b)
+	}
+
+	// Explicit options override the document, and the emitted ISA16
+	// declares the configured component separator.
+	b, err = x12.Marshal(doc(),
+		x12.WithSegmentTerminator("~"),
+		x12.WithElementSeparator("*"),
+		x12.WithComponentSeparator(":"))
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if !strings.Contains(string(b), "HI*BK:8901~") {
+		t.Errorf("Marshal() = %q, want option delimiters (HI*BK:8901)", b)
+	}
+	if !strings.Contains(string(b), "*:~") || strings.Contains(string(b), ">") {
+		t.Errorf("Marshal() = %q, want ISA16 rewritten to the configured separator", b)
+	}
+
+	// Package defaults apply when neither options nor the document
+	// carry delimiters.
+	plain := doc()
+	plain.SegmentTerminator = ""
+	plain.ElementSeparator = ""
+	plain.Interchange.Header.ComponentElementSeparator = ""
+	b, err = x12.Marshal(plain)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if !strings.Contains(string(b), "HI*BK:8901~") {
+		t.Errorf("Marshal() = %q, want default delimiters (HI*BK:8901)", b)
+	}
+}
