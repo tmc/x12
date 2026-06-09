@@ -16,7 +16,7 @@ type Interchange struct {
 	Trailer        *IEA
 }
 
-// ISA is the Interchange Control Headera.
+// ISA is the Interchange Control Header.
 type ISA struct {
 	AuthorizationInfoQualifier     string
 	AuthorizationInformation       string
