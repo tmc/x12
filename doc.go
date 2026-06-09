@@ -48,4 +48,14 @@
 // Both decoding and validation errors wrap the package's sentinel
 // errors (ErrMissingElement, ErrInvalidFormat, ErrInvalidArgument) and
 // can be matched with errors.Is.
+//
+// # Design
+//
+// The package materializes each interchange as an in-memory Document;
+// Decoder and Encoder stream bytes, not events. This suits the common
+// case of inspecting or transforming whole interchanges, at the cost
+// of holding a document in memory while it is processed. An event- or
+// segment-level streaming API, and typed transaction-set layers (837,
+// 835, ...) validated against implementation guides, are out of scope
+// and belong in packages built on top of this one.
 package x12
