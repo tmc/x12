@@ -83,6 +83,8 @@ func NewDecoder(r io.Reader, opts ...DecodeOption) *Decoder {
 // the component element separator is ISA16, and the segment terminator
 // is the byte following ISA16. Otherwise the default delimiters are
 // assumed.
+//
+// Decode returns io.EOF if the input contains no segments.
 func (dec *Decoder) Decode() (*Document, error) {
 	state := initializeDecodeState(dec.opts)
 	segmentParsers := state.getSegmentParsers()
@@ -111,10 +113,16 @@ func (dec *Decoder) Decode() (*Document, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+	if state.lineIndex == 0 {
+		return nil, io.EOF
+	}
 	return state.doc, nil
 }
 
 // Decode decodes an X12 document from an io.Reader.
+//
+// Like Decoder.Decode, it returns io.EOF if the input contains no
+// segments.
 func Decode(in io.Reader, opts ...DecodeOption) (*Document, error) {
 	return NewDecoder(in, opts...).Decode()
 }
@@ -283,11 +291,14 @@ func scanSegments(term byte) bufio.SplitFunc {
 }
 
 func (s *decodeState) processLine(line string, parsers map[string]segmentParser) error {
-	s.lineIndex++
 	segment := strings.Trim(line, "\r\n")
 	if segment == "" {
+		// Stray terminators and blank lines are not segments; they do
+		// not advance the segment ordinal used by ParseError and the
+		// automatic-envelope check.
 		return nil
 	}
+	s.lineIndex++
 
 	elements := strings.Split(segment, s.elementSeparator)
 	segmentID, _ := s.extractSegmentID(elements)

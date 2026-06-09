@@ -588,3 +588,32 @@ func TestDecodeAutomaticEnvelopeSingleTransaction(t *testing.T) {
 		t.Errorf("Decode() error = %+v, want *ParseError{SegmentID: ST, Segment: 4}", err)
 	}
 }
+
+func TestDecodeEmptyInput(t *testing.T) {
+	if _, err := x12.Decode(strings.NewReader("")); err != io.EOF {
+		t.Errorf("Decode(empty) error = %v, want io.EOF", err)
+	}
+	if _, err := x12.Decode(strings.NewReader("~~\n")); err != io.EOF {
+		t.Errorf("Decode(stray terminators) error = %v, want io.EOF", err)
+	}
+	dec := x12.NewDecoder(strings.NewReader(exampleEDI))
+	if _, err := dec.Decode(); err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if _, err := dec.Decode(); err != io.EOF {
+		t.Errorf("second Decode() error = %v, want io.EOF", err)
+	}
+}
+
+func TestDecodeLeadingTerminator(t *testing.T) {
+	// A stray leading terminator must not count as the first segment,
+	// which used to defeat the automatic envelope.
+	const input = `~ST*837*0001~NM1*41*2*ACME~SE*3*0001~`
+	doc, err := x12.Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if !doc.EnvelopeAutomaticallyAdded {
+		t.Error("EnvelopeAutomaticallyAdded = false, want true")
+	}
+}
