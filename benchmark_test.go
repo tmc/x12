@@ -46,8 +46,7 @@ func BenchmarkMarshal(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	m := &x12.Marshaler{}
-	out, err := m.Marshal(doc)
+	out, err := x12.Marshal(doc)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func BenchmarkMarshal(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := m.Marshal(doc); err != nil {
+		if _, err := x12.Marshal(doc); err != nil {
 			b.Fatal(err)
 		}
 	}

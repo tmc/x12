@@ -172,7 +172,7 @@ IEA*1*000095071~`,
 			if validateErr != tt.validateResult {
 				t.Errorf("Validate() error = '%v', wantErr '%v'", validateErr, tt.validateResult)
 			}
-			encoded, err := (&x12.Marshaler{}).Marshal(got)
+			encoded, err := x12.Marshal(got)
 			trimmedInput := strings.ReplaceAll(tt.input, "\n", "")
 			if err != nil {
 				t.Errorf("Marshal() error = %v", err)
@@ -222,9 +222,7 @@ func TestRoundtripping(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			encoded, err := (&x12.Marshaler{
-				NewLines: true,
-			}).Marshal(edi)
+			encoded, err := x12.Marshal(edi, x12.WithNewlines())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -302,7 +300,7 @@ func TestDecodeAutomaticEnvelope(t *testing.T) {
 		t.Errorf("Validate() = %v", err)
 	}
 	// Marshaling an automatically enveloped document emits only ST..SE.
-	b, err := (&x12.Marshaler{}).Marshal(doc)
+	b, err := x12.Marshal(doc)
 	if err != nil {
 		t.Fatalf("Marshal() = %v", err)
 	}
@@ -364,7 +362,7 @@ func TestMarshalHandBuilt(t *testing.T) {
 		`SE*4*0001~` +
 		`GE*1*1~` +
 		`IEA*1*000000001~`
-	b, err := (&x12.Marshaler{}).Marshal(doc)
+	b, err := x12.Marshal(doc)
 	if err != nil {
 		t.Fatalf("Marshal() = %v", err)
 	}
@@ -375,7 +373,7 @@ func TestMarshalHandBuilt(t *testing.T) {
 
 func TestMarshalAutomaticEnvelopeGuard(t *testing.T) {
 	doc := &x12.Document{EnvelopeAutomaticallyAdded: true, Interchange: &x12.Interchange{}}
-	if _, err := (&x12.Marshaler{}).Marshal(doc); !errors.Is(err, x12.ErrInvalidArgument) {
+	if _, err := x12.Marshal(doc); !errors.Is(err, x12.ErrInvalidArgument) {
 		t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
 	}
 }

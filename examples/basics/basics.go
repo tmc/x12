@@ -38,8 +38,7 @@ func main() {
 		os.Exit(1)
 	}
 	_ = jsonOutput
-	m := &x12.Marshaler{}
-	b, err := m.Marshal(doc)
+	b, err := x12.Marshal(doc)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

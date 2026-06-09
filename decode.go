@@ -9,14 +9,17 @@ import (
 	"strings"
 )
 
+// Default delimiters, used when encoding and decoding unless overridden.
 const (
-	// SegmentSeparator is the character that separates segments.
-	SegmentSeparator = "~"
-	// ElementSeparator is the character that separates elements.
-	ElementSeparator = "*"
-	// SubElementSeparator is the character that separates sub-elements.
-	SubElementSeparator = ":"
-	// When encountering an unknown segment use this parser
+	// DefaultSegmentTerminator terminates each segment.
+	DefaultSegmentTerminator = "~"
+	// DefaultElementSeparator separates the elements of a segment.
+	DefaultElementSeparator = "*"
+	// DefaultComponentSeparator separates the components of a composite
+	// element.
+	DefaultComponentSeparator = ":"
+
+	// When encountering an unknown segment use this parser.
 	defaultParser = "DEFAULT"
 )
 
@@ -104,7 +107,7 @@ func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return 0, nil, nil
 	}
 
-	if i := strings.Index(string(data), SegmentSeparator); i >= 0 {
+	if i := strings.Index(string(data), DefaultSegmentTerminator); i >= 0 {
 		// We have a full segment
 		return i + 1, data[0:i], nil
 	}
@@ -125,7 +128,7 @@ func (s *decodeState) processLine(line string, parsers map[string]segmentParser)
 		return nil
 	}
 
-	elements := strings.Split(segment, ElementSeparator)
+	elements := strings.Split(segment, DefaultElementSeparator)
 	segmentID, _ := s.extractSegmentID(elements)
 
 	parseFunc, exists := parsers[segmentID]
@@ -372,7 +375,7 @@ func (s *decodeState) considerAutomaticEnvelope() {
 	s.doc.EnvelopeAutomaticallyAdded = true
 	s.doc.Interchange.Header = &ISA{
 		ControlNumber:             "000000001",
-		ComponentElementSeparator: ElementSeparator,
+		ComponentElementSeparator: DefaultElementSeparator,
 	}
 
 	s.doc.Interchange.Trailer = &IEA{

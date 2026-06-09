@@ -3,6 +3,7 @@ package x12_test
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/tmc/x12"
@@ -42,16 +43,38 @@ func ExampleDecode() {
 	// segments 5
 }
 
-func ExampleMarshaler_Marshal() {
+func ExampleMarshal() {
 	doc, err := x12.Decode(strings.NewReader(exampleEDI))
 	if err != nil {
 		log.Fatal(err)
 	}
-	b, err := (&x12.Marshaler{NewLines: true}).Marshal(doc)
+	b, err := x12.Marshal(doc, x12.WithNewlines())
 	if err != nil {
 		log.Fatal(err)
 	}
 	lines := strings.Split(string(b), "\n")
 	fmt.Println(lines[2])
 	// Output: ST*824*021390001*005010X186A1~
+}
+
+func ExampleNewEncoder() {
+	doc, err := x12.Decode(strings.NewReader(exampleEDI))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := x12.NewEncoder(os.Stdout, x12.WithNewlines()).Encode(doc); err != nil {
+		log.Fatal(err)
+	}
+	// Output:
+	// ISA*00*          *00*          *08*9254110060     *ZZ*123456789      *041216*0805*U*00501*000095071*0*P*>~
+	// GS*AG*5137624388*123456789*20041216*0805*95071*X*005010~
+	// ST*824*021390001*005010X186A1~
+	// BGN*11*FFA.ABCDEF.123456*20020709*0932**123456789**WQ~
+	// N1*41*ABC INSURANCE*46*111111111~
+	// PER*IC*JOHN JOHNSON*TE*8005551212*EX*1439~
+	// N1*40*SMITHCO*46*A1234~
+	// OTI*TA*TN*NA***20020709*0902*2*0001*834*005010X220A1~
+	// SE*7*021390001~
+	// GE*1*95071~
+	// IEA*1*000095071~
 }
