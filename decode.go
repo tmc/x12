@@ -26,7 +26,7 @@ var (
 )
 
 type decodeState struct {
-	doc                  *X12Document
+	doc                  *Document
 	lineIndex            int
 	currentFunctionGroup *FunctionGroup
 	currentTransaction   *Transaction
@@ -62,7 +62,7 @@ func WithMaxSegmentSize(n int) DecodeOption {
 }
 
 // Decode decodes an X12 document from an io.Reader
-func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
+func Decode(in io.Reader, opts ...DecodeOption) (*Document, error) {
 	state := initializeDecodeState(opts)
 	segmentParsers := state.getSegmentParsers()
 
@@ -83,7 +83,7 @@ func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
 
 func initializeDecodeState(opts []DecodeOption) *decodeState {
 	state := &decodeState{
-		doc: &X12Document{
+		doc: &Document{
 			Interchange: &Interchange{},
 		},
 		lineIndex:            0,
@@ -136,7 +136,7 @@ func (s *decodeState) processLine(line string, parsers map[string]segmentParser)
 }
 
 // Validate validates the x12 document
-func (doc *X12Document) Validate() error {
+func (doc *Document) Validate() error {
 	if doc == nil {
 		return fmt.Errorf("%w: doc nil", ErrInvalidArgument)
 	}

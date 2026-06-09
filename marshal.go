@@ -13,7 +13,7 @@ type Marshaler struct {
 	NewLines bool
 }
 
-func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
+func (m *Marshaler) Marshal(x *Document) ([]byte, error) {
 	if x == nil {
 		return nil, fmt.Errorf("%w: x nil", ErrInvalidArgument)
 	}

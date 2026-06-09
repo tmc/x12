@@ -102,14 +102,14 @@ func Test_decodeState_parseGS(t *testing.T) {
 	}{
 		{
 			name:     "too few elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X"},
 			want:     nil,
 			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X", "005010"},
 			want: &GS{
 				FunctionalIDCode:         "AG",
@@ -124,7 +124,7 @@ func Test_decodeState_parseGS(t *testing.T) {
 		},
 		{
 			name:     "too many elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X", "005010", "Hello", "World!"},
 			want: &GS{
 				FunctionalIDCode:         "AG",
@@ -160,14 +160,14 @@ func Test_decodeState_parseIEA(t *testing.T) {
 	}{
 		{
 			name:     "too few elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}},
 			elements: []string{"IEA", "1"},
 			want:     nil,
 			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}},
 			elements: []string{"IEA", "1", "000095071"},
 			want: &IEA{
 				NumberOfIncludedFunctionalGroups: "1",
@@ -176,7 +176,7 @@ func Test_decodeState_parseIEA(t *testing.T) {
 		},
 		{
 			name:     "too many elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"IEA", "1", "000095071", "Hello", "World!"},
 			want: &IEA{
 				NumberOfIncludedFunctionalGroups: "1",
@@ -206,14 +206,14 @@ func Test_decodeState_parseISA(t *testing.T) {
 	}{
 		{
 			name:     "too few elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}},
 			elements: []string{"ISA", "00", "          ", "00", "          ", "08", "9254110060     ", "ZZ", "123456789      ", "041216", "0805", "U", "00501", "000095071", "0", "P"},
 			want:     nil,
 			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}},
 			elements: []string{"ISA", "00", "          ", "00", "          ", "08", "9254110060     ", "ZZ", "123456789      ", "041216", "0805", "U", "00501", "000095071", "0", "P", ">"},
 			want: &ISA{
 				AuthorizationInfoQualifier:     "00",
@@ -236,7 +236,7 @@ func Test_decodeState_parseISA(t *testing.T) {
 		},
 		{
 			name:     "too many elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"ISA", "00", "          ", "00", "          ", "08", "9254110060     ", "ZZ", "123456789      ", "041216", "0805", "U", "00501", "000095071", "0", "P", ">", "Hello", "World!"},
 			want: &ISA{
 				AuthorizationInfoQualifier:     "00",
@@ -343,7 +343,7 @@ func Test_decodeState_parseST(t *testing.T) {
 		},
 		{
 			name:     "typical segment",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}, lineIndex: 1},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}, lineIndex: 1},
 			elements: []string{"ST", "824", "021390001", "005010X186A1"},
 			want: &ST{
 				TransactionSetIDCode:              "824",
@@ -353,7 +353,7 @@ func Test_decodeState_parseST(t *testing.T) {
 		},
 		{
 			name:     "two element segment",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}, lineIndex: 1},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}, lineIndex: 1},
 			elements: []string{"ST", "824", "021390001"},
 			want: &ST{
 				TransactionSetIDCode:        "824",
@@ -362,7 +362,7 @@ func Test_decodeState_parseST(t *testing.T) {
 		},
 		{
 			name:     "too many elements",
-			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}, lineIndex: 1},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{}}, lineIndex: 1},
 			elements: []string{"ST", "824", "021390001", "005010X186A1", "Hello", "World!"},
 			want: &ST{
 				TransactionSetIDCode:              "824",

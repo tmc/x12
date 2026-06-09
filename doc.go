@@ -7,7 +7,7 @@
 //
 // An X12 interchange maps onto the types in this package as follows:
 //
-//	X12Document
+//	Document
 //	└── Interchange             ISA ... IEA
 //	    └── FunctionGroup       GS ... GE
 //	        └── Transaction     ST ... SE

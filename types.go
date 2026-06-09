@@ -1,7 +1,7 @@
 package x12
 
-// X12Document is the root element of an X12 document.
-type X12Document struct {
+// Document is the root element of an X12 document.
+type Document struct {
 	Interchange *Interchange
 
 	// EnvelopeAutomaticallyAdded is true if the envelope was automatically added to a decoded document.

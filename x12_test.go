@@ -18,7 +18,7 @@ func TestDecode(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    *x12.X12Document
+		want    *x12.Document
 		wantErr error
 
 		validateResult string
@@ -36,7 +36,7 @@ OTI*TA*TN*NA***20020709*0902*2*0001*834*005010X220A1~
 SE*7*021390001~
 GE*1*95071~
 IEA*1*000095071~`,
-			want: &x12.X12Document{
+			want: &x12.Document{
 				Interchange: &x12.Interchange{
 					Header: &x12.ISA{
 						AuthorizationInfoQualifier:     "00",
@@ -312,7 +312,7 @@ func TestDecodeAutomaticEnvelope(t *testing.T) {
 }
 
 func TestMarshalHandBuilt(t *testing.T) {
-	doc := &x12.X12Document{
+	doc := &x12.Document{
 		Interchange: &x12.Interchange{
 			Header: &x12.ISA{
 				AuthorizationInfoQualifier:     "00",
@@ -374,7 +374,7 @@ func TestMarshalHandBuilt(t *testing.T) {
 }
 
 func TestMarshalAutomaticEnvelopeGuard(t *testing.T) {
-	doc := &x12.X12Document{EnvelopeAutomaticallyAdded: true, Interchange: &x12.Interchange{}}
+	doc := &x12.Document{EnvelopeAutomaticallyAdded: true, Interchange: &x12.Interchange{}}
 	if _, err := (&x12.Marshaler{}).Marshal(doc); !errors.Is(err, x12.ErrInvalidArgument) {
 		t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
 	}
