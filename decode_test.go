@@ -437,33 +437,46 @@ func Test_decodeState_parseSegment(t *testing.T) {
 
 func Test_decodeState_processLine(t *testing.T) {
 	tests := []struct {
-		name    string
-		state   decodeState
-		line    string
-		wantErr error
+		name             string
+		elementSeparator string
+		line             string
+		want             []Segment
+		wantErr          error
 	}{
 		{
-			name:  "Typical Line",
-			state: decodeState{currentTransaction: &Transaction{}},
-			line:  "DEF 1 2 3",
+			name: "typical line",
+			line: "DEF*1*2*3",
+			want: []Segment{{ID: "DEF", Elements: []Element{{Value: "1"}, {Value: "2"}, {Value: "3"}}}},
 		},
 		{
-			name:  "Empty Line",
-			state: decodeState{},
-			line:  "",
+			name:             "discovered separator",
+			elementSeparator: "|",
+			line:             "DEF|1|2",
+			want:             []Segment{{ID: "DEF", Elements: []Element{{Value: "1"}, {Value: "2"}}}},
 		},
 		{
-			name:  "Whitespace only",
-			state: decodeState{currentTransaction: &Transaction{}},
-			line:  " ",
+			name: "empty line",
+			line: "",
+		},
+		{
+			name: "whitespace only",
+			line: " ",
+			want: []Segment{{ID: " ", Elements: []Element{}}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsers := tt.state.getSegmentParsers()
-			if err := tt.state.processLine(tt.line, parsers); !errors.Is(err, tt.wantErr) {
+			state := initializeDecodeState(nil)
+			state.currentTransaction = &Transaction{}
+			if tt.elementSeparator != "" {
+				state.elementSeparator = tt.elementSeparator
+			}
+			if err := state.processLine(tt.line, state.getSegmentParsers()); !errors.Is(err, tt.wantErr) {
 				t.Errorf("processLine() error = %v, want %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(tt.want, state.currentTransaction.Segments); diff != "" {
+				t.Errorf("processLine() segments mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
