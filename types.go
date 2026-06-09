@@ -95,9 +95,9 @@ type Segment struct {
 }
 
 // Element is a single element.
-// An element is a single value in a segment.
+// An element is a single value in a segment. Its position within the
+// segment is its index in the segment's Elements slice.
 type Element struct {
-	ID         string
 	Value      string
 	Components []string `json:",omitempty"`
 }

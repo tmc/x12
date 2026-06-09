@@ -321,13 +321,9 @@ func (s *decodeState) parseSegment(elements []string) error {
 func parseElements(elements []string) []Element {
 	parsedElements := make([]Element, len(elements))
 	for i, element := range elements {
-		parsedElements[i] = Element{
-			ID:    fmt.Sprintf("%02d", i+1),
-			Value: element,
-		}
+		parsedElements[i] = Element{Value: element}
 	}
 	return parsedElements
-
 }
 
 func (s *decodeState) extractSegmentID(elements []string) (string, []string) {
