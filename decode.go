@@ -175,7 +175,13 @@ func parseCanonicalISA(buf []byte) (elements []string, ok bool) {
 			return nil, false
 		}
 	}
-	if buf[105] == sep {
+	// The same sanity checks readISAVariable applies to ISA16 and the
+	// terminator; on failure the caller falls back to it for a precise
+	// error.
+	if isa16 := buf[104]; isa16 == sep || isa16 == '\r' || isa16 == '\n' {
+		return nil, false
+	}
+	if term := buf[105]; term == sep || isAlnum(term) {
 		return nil, false
 	}
 	elements = make([]string, 0, 17)

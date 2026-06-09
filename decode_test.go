@@ -554,3 +554,33 @@ func Test_scanSegments(t *testing.T) {
 		})
 	}
 }
+
+func Test_parseCanonicalISA_rejects(t *testing.T) {
+	// A canonical 106-byte ISA built from the standard field widths.
+	canonical := "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*000000001*0*P*:~"
+	if len(canonical) != isaLen {
+		t.Fatalf("fixture length = %d, want %d", len(canonical), isaLen)
+	}
+	if _, ok := parseCanonicalISA([]byte(canonical)); !ok {
+		t.Fatal("parseCanonicalISA() = !ok for a canonical ISA")
+	}
+	tests := []struct {
+		name   string
+		mutate func([]byte)
+	}{
+		{"alphanumeric terminator", func(b []byte) { b[105] = 'Z' }},
+		{"terminator equals separator", func(b []byte) { b[105] = '*' }},
+		{"ISA16 equals separator", func(b []byte) { b[104] = '*' }},
+		{"newline ISA16", func(b []byte) { b[104] = '\n' }},
+		{"alphanumeric separator", func(b []byte) { copy(b, "ISAX"); b[105] = 'X' }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := []byte(canonical)
+			tt.mutate(b)
+			if _, ok := parseCanonicalISA(b); ok {
+				t.Error("parseCanonicalISA() = ok, want rejection")
+			}
+		})
+	}
+}
