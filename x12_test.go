@@ -543,3 +543,22 @@ func TestDecodeStrictSegments(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeRejectsMultipleInterchanges(t *testing.T) {
+	// A Document holds one interchange; concatenated interchanges used
+	// to be silently merged, with the second ISA/IEA overwriting the
+	// first.
+	const one = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*%s*0*P*:~` +
+		`GS*HC*SENDER*RECEIVER*20230101*1200*1*X*005010~` +
+		`ST*837*0001~NM1*41*2*ACME~SE*3*0001~` +
+		`GE*1*1~IEA*1*%s~`
+	input := fmt.Sprintf(one, "000000001", "000000001") + fmt.Sprintf(one, "000000002", "000000002")
+	_, err := x12.Decode(strings.NewReader(input))
+	if !errors.Is(err, x12.ErrInvalidFormat) {
+		t.Errorf("Decode() error = %v, want ErrInvalidFormat", err)
+	}
+	var pe *x12.ParseError
+	if !errors.As(err, &pe) || pe.SegmentID != "ISA" {
+		t.Errorf("Decode() error = %v, want *ParseError on ISA", err)
+	}
+}

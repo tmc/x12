@@ -393,6 +393,11 @@ func (s *decodeState) getSegmentParsers() map[string]segmentParser {
 }
 
 func (s *decodeState) parseISA(elements []string) error {
+	if s.doc.Interchange.Header != nil {
+		// A Document holds a single interchange; a second ISA would
+		// silently overwrite the first.
+		return s.parseErrorf("ISA", 0, "%w: multiple ISA segments", ErrInvalidFormat)
+	}
 	if len(elements) < 17 {
 		return s.parseErrorf("ISA", len(elements), "%w", ErrMissingElement)
 	}
@@ -418,6 +423,9 @@ func (s *decodeState) parseISA(elements []string) error {
 }
 
 func (s *decodeState) parseIEA(elements []string) error {
+	if s.doc.Interchange.Trailer != nil {
+		return s.parseErrorf("IEA", 0, "%w: multiple IEA segments", ErrInvalidFormat)
+	}
 	if len(elements) < 3 {
 		return s.parseErrorf("IEA", len(elements), "%w", ErrMissingElement)
 	}
