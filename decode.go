@@ -182,6 +182,9 @@ func (s *decodeState) getSegmentParsers() map[string]segmentParser {
 }
 
 func (s *decodeState) parseISA(elements []string) error {
+	if s.doc.Interchange.Header != nil {
+		return s.Errorf("%w: duplicate ISA segment", ErrInvalidFormat)
+	}
 	if len(elements) < 17 {
 		return s.Errorf("ISA: %w", ErrMissingElement)
 	}
