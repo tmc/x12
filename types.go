@@ -103,16 +103,21 @@ type SE struct {
 	ControlNumber string // SE02
 }
 
-// Segment is a single segment.
-// A segment is a single line of an X12 document.
+// Segment is a single segment of an X12 document: a segment identifier
+// followed by elements, ended by the segment terminator (for example
+// NM1*41*2*ACME~).
 type Segment struct {
 	ID       string
 	Elements []Element
 }
 
-// Element is a single element.
-// An element is a single value in a segment. Its position within the
+// Element is a single element of a segment. Its position within the
 // segment is its index in the segment's Elements slice.
+//
+// Decode never populates Components: composite values are kept unsplit
+// in Value. When encoding, a non-nil Components is joined to Value with
+// the component element separator, letting hand-built documents express
+// composite elements.
 type Element struct {
 	Value      string
 	Components []string `json:",omitempty"`

@@ -24,9 +24,17 @@ const (
 	defaultParser = "DEFAULT"
 )
 
+// Sentinel errors wrapped by decoding, encoding, and validation
+// failures; match them with errors.Is.
 var (
-	ErrMissingElement  = errors.New("missing element")
-	ErrInvalidFormat   = errors.New("invalid format")
+	// ErrMissingElement reports a segment that lacks a required element.
+	ErrMissingElement = errors.New("missing element")
+	// ErrInvalidFormat reports input or a document that is not
+	// well-formed X12, such as a malformed segment or a mismatched
+	// trailer.
+	ErrInvalidFormat = errors.New("invalid format")
+	// ErrInvalidArgument reports an invalid caller-supplied value, such
+	// as a nil document passed to Marshal.
 	ErrInvalidArgument = errors.New("invalid argument")
 )
 

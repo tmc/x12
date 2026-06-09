@@ -21,11 +21,16 @@
 // Element values are kept as strings, exactly as they appear in the
 // input. The package does not interpret dates, times, numbers, or code
 // values, and it does not validate segments against a transaction-set
-// implementation guide. Composite and repeated element values are not
-// split: a value containing component (ISA16) or repetition (ISA11)
-// separators is preserved verbatim, and the separators themselves are
-// available on the decoded document for callers that split values
-// further.
+// implementation guide. Decoding does not split composite or repeated
+// element values: a value containing component (ISA16) or repetition
+// (ISA11) separators is preserved verbatim, and the separators
+// themselves are available on the decoded document for callers that
+// split values further. When encoding, an Element's Components, if
+// set, are joined to its Value with the component separator.
+//
+// Envelope segments (ISA/IEA, GS/GE, ST/SE) are normalized rather than
+// preserved byte for byte: elements beyond those the header and trailer
+// structs model, and an empty trailing ST03, are dropped when decoding.
 //
 // # Decoding and encoding
 //
