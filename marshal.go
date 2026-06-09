@@ -47,25 +47,26 @@ func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
 }
 
 func (m *Marshaler) ss() string {
-	if m.SegmentSeparator == "" {
-		m.SegmentSeparator = SegmentSeparator
+	ss := m.SegmentSeparator
+	if ss == "" {
+		ss = SegmentSeparator
 	}
 	if m.NewLines {
-		return m.SegmentSeparator + "\n"
+		return ss + "\n"
 	}
-	return m.SegmentSeparator
+	return ss
 }
 
 func (m *Marshaler) es() string {
 	if m.ElementSeparator == "" {
-		m.ElementSeparator = ElementSeparator
+		return ElementSeparator
 	}
 	return m.ElementSeparator
 }
 
 func (m *Marshaler) ses() string {
 	if m.SubElementSeparator == "" {
-		m.SubElementSeparator = SubElementSeparator
+		return SubElementSeparator
 	}
 	return m.SubElementSeparator
 }
