@@ -283,6 +283,9 @@ func (s *decodeState) parseSE(elements []string) error {
 		NumberOfIncludedSegments:    elements[1],
 		TransactionSetControlNumber: elements[2],
 	}
+	// The transaction is now closed; clear it so a segment appearing before the
+	// next ST is rejected instead of being appended to this transaction.
+	s.currentTransaction = nil
 	return nil
 }
 

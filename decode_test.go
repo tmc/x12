@@ -320,11 +320,14 @@ func Test_decodeState_parseSE(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// parseSE clears currentTransaction once the transaction is closed,
+			// so capture it beforehand to inspect the trailer it set.
+			transaction := tt.state.currentTransaction
 			if err := tt.state.parseSE(tt.elements); (err != nil) != tt.wantErr {
 				t.Errorf("parseSE() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !tt.wantErr {
-				got := tt.state.currentTransaction.Trailer
+				got := transaction.Trailer
 				if !reflect.DeepEqual(got, tt.want) {
 					t.Errorf("parseSE() got = %v, want %v", got, tt.want)
 				}
