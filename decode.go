@@ -215,7 +215,7 @@ func (s *decodeState) parseISA(elements []string) error {
 		InterchangeReceiverID:          elements[8],
 		InterchangeDate:                elements[9],
 		InterchangeTime:                elements[10],
-		InterchangeControlStandardsID:  elements[11],
+		RepetitionSeparator:            elements[11],
 		InterchangeControlVersion:      elements[12],
 		InterchangeControlNumber:       elements[13],
 		AcknowledgmentRequested:        elements[14],

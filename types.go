@@ -28,12 +28,19 @@ type ISA struct {
 	InterchangeReceiverID          string
 	InterchangeDate                string
 	InterchangeTime                string
-	InterchangeControlStandardsID  string
-	InterchangeControlVersion      string
-	InterchangeControlNumber       string
-	AcknowledgmentRequested        string
-	UsageIndicator                 string
-	ComponentElementSeparator      string
+
+	// RepetitionSeparator is ISA11. In version 5010 and later it holds
+	// the repetition separator (commonly "^"). In earlier versions the
+	// same position carried the interchange control standards
+	// identifier, conventionally "U"; the value is preserved verbatim
+	// either way.
+	RepetitionSeparator string
+
+	InterchangeControlVersion string
+	InterchangeControlNumber  string
+	AcknowledgmentRequested   string
+	UsageIndicator            string
+	ComponentElementSeparator string
 }
 
 // IEA is the Interchange Control Trailer.

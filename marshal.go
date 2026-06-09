@@ -78,7 +78,7 @@ func (m *Marshaler) encodeISA(h *ISA, builder *strings.Builder) {
 		h.InterchangeReceiverID,
 		h.InterchangeDate,
 		h.InterchangeTime,
-		h.InterchangeControlStandardsID,
+		h.RepetitionSeparator,
 		h.InterchangeControlVersion,
 		h.InterchangeControlNumber,
 		h.AcknowledgmentRequested,

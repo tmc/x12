@@ -49,7 +49,7 @@ IEA*1*000095071~`,
 						InterchangeReceiverID:          "123456789      ",
 						InterchangeDate:                "041216",
 						InterchangeTime:                "0805",
-						InterchangeControlStandardsID:  "U",
+						RepetitionSeparator:            "U",
 						InterchangeControlVersion:      "00501",
 						InterchangeControlNumber:       "000095071",
 						AcknowledgmentRequested:        "0",
@@ -275,7 +275,7 @@ IEA*1*191511902~`
 	if err != nil {
 		t.Fatalf("Decode() with option: %v", err)
 	}
-	if got, want := doc.Interchange.Header.InterchangeControlStandardsID, "^ "; got != want {
+	if got, want := doc.Interchange.Header.RepetitionSeparator, "^ "; got != want {
 		t.Errorf("ISA11 = %q, want %q", got, want)
 	}
 	if got, want := doc.Interchange.Header.InterchangeControlNumber, "191511902 "; got != want {
@@ -325,7 +325,7 @@ func TestMarshalHandBuilt(t *testing.T) {
 				InterchangeReceiverID:          "RECEIVER       ",
 				InterchangeDate:                "230101",
 				InterchangeTime:                "1200",
-				InterchangeControlStandardsID:  "^",
+				RepetitionSeparator:            "^",
 				InterchangeControlVersion:      "00501",
 				InterchangeControlNumber:       "000000001",
 				AcknowledgmentRequested:        "0",
