@@ -40,4 +40,12 @@
 // Validate checks that the envelope is structurally sound: headers and
 // trailers are present, their control numbers match, and the trailer
 // counts (IEA01, GE01, SE01) match the document's contents.
+//
+// # Errors
+//
+// Syntax errors found while decoding are reported as a *ParseError,
+// which records the offending segment's ordinal, ID, and element.
+// Both decoding and validation errors wrap the package's sentinel
+// errors (ErrMissingElement, ErrInvalidFormat, ErrInvalidArgument) and
+// can be matched with errors.Is.
 package x12

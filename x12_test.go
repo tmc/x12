@@ -485,3 +485,33 @@ func TestRepetitionSeparatorRoundTrip(t *testing.T) {
 		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestParseError(t *testing.T) {
+	// An SE missing its control number, three segments in.
+	const input = `ST*837*0001~NM1*41*2*ACME~SE*3~`
+	_, err := x12.Decode(strings.NewReader(input))
+	var pe *x12.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("Decode() error = %v, want *ParseError", err)
+	}
+	if !errors.Is(err, x12.ErrMissingElement) {
+		t.Errorf("errors.Is(err, ErrMissingElement) = false, want true")
+	}
+	if pe.SegmentID != "SE" {
+		t.Errorf("SegmentID = %q, want %q", pe.SegmentID, "SE")
+	}
+	if pe.Segment != 3 {
+		t.Errorf("Segment = %d, want 3", pe.Segment)
+	}
+
+	_, err = x12.Decode(strings.NewReader(`ISA*00*bad~`))
+	if !errors.As(err, &pe) {
+		t.Fatalf("Decode() error = %v, want *ParseError", err)
+	}
+	if !errors.Is(err, x12.ErrMissingElement) {
+		t.Errorf("errors.Is(err, ErrMissingElement) = false, want true")
+	}
+	if pe.SegmentID != "ISA" {
+		t.Errorf("SegmentID = %q, want %q", pe.SegmentID, "ISA")
+	}
+}

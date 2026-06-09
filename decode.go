@@ -184,31 +184,31 @@ func (s *decodeState) readISAVariable(r *bufio.Reader) (elemSep, term byte, err 
 	}
 	b, err := r.ReadByte()
 	if err != nil {
-		return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+		return 0, 0, s.parseErrorf("ISA", 1, "%w", ErrMissingElement)
 	}
 	if b == ' ' || b == '\t' {
 		if !s.withRelaxedSegmentIDWhitespace {
-			return 0, 0, s.Errorf("%w: whitespace after ISA segment ID (use WithRelaxedSegmentIDWhitespace)", ErrInvalidFormat)
+			return 0, 0, s.parseErrorf("ISA", 0, "%w: whitespace after segment ID (use WithRelaxedSegmentIDWhitespace)", ErrInvalidFormat)
 		}
 		for b == ' ' || b == '\t' {
 			if b, err = r.ReadByte(); err != nil {
-				return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+				return 0, 0, s.parseErrorf("ISA", 1, "%w", ErrMissingElement)
 			}
 		}
 	}
 	sep := b
 	if isAlnum(sep) {
-		return 0, 0, s.Errorf("%w: invalid ISA element separator %q", ErrInvalidFormat, sep)
+		return 0, 0, s.parseErrorf("ISA", 0, "%w: invalid element separator %q", ErrInvalidFormat, sep)
 	}
 	elements := []string{"ISA"}
 	var field []byte
 	for n := 0; len(elements) < 16; n++ {
 		if n > 512 {
-			return 0, 0, s.Errorf("%w: unterminated ISA segment", ErrInvalidFormat)
+			return 0, 0, s.parseErrorf("ISA", 0, "%w: unterminated segment", ErrInvalidFormat)
 		}
 		b, err := r.ReadByte()
 		if err != nil {
-			return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+			return 0, 0, s.parseErrorf("ISA", len(elements), "%w", ErrMissingElement)
 		}
 		switch b {
 		case sep:
@@ -217,22 +217,22 @@ func (s *decodeState) readISAVariable(r *bufio.Reader) (elemSep, term byte, err 
 		case '\r', '\n':
 			// A newline inside the ISA means we ran past the end of
 			// the segment without finding all of its elements.
-			return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+			return 0, 0, s.parseErrorf("ISA", len(elements), "%w", ErrMissingElement)
 		default:
 			field = append(field, b)
 		}
 	}
 	isa16, err := r.ReadByte()
 	if err != nil || isa16 == sep || isa16 == '\r' || isa16 == '\n' {
-		return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+		return 0, 0, s.parseErrorf("ISA", 16, "%w", ErrMissingElement)
 	}
 	elements = append(elements, string(isa16))
 	term, err = r.ReadByte()
 	if err != nil {
-		return 0, 0, s.Errorf("%w: unterminated ISA segment", ErrInvalidFormat)
+		return 0, 0, s.parseErrorf("ISA", 0, "%w: unterminated segment", ErrInvalidFormat)
 	}
 	if term == sep || isAlnum(term) {
-		return 0, 0, s.Errorf("%w: invalid segment terminator %q", ErrInvalidFormat, term)
+		return 0, 0, s.parseErrorf("ISA", 0, "%w: invalid segment terminator %q", ErrInvalidFormat, term)
 	}
 	if err := s.parseISA(elements); err != nil {
 		return 0, 0, err
@@ -376,7 +376,7 @@ func (s *decodeState) getSegmentParsers() map[string]segmentParser {
 
 func (s *decodeState) parseISA(elements []string) error {
 	if len(elements) < 17 {
-		return s.Errorf("ISA: %w", ErrMissingElement)
+		return s.parseErrorf("ISA", len(elements), "%w", ErrMissingElement)
 	}
 	s.doc.Interchange.Header = &ISA{
 		AuthorizationInfoQualifier: elements[1],
@@ -401,7 +401,7 @@ func (s *decodeState) parseISA(elements []string) error {
 
 func (s *decodeState) parseIEA(elements []string) error {
 	if len(elements) < 3 {
-		return s.Errorf("IEA: %w", ErrMissingElement)
+		return s.parseErrorf("IEA", len(elements), "%w", ErrMissingElement)
 	}
 	s.doc.Interchange.Trailer = &IEA{
 		FunctionalGroupCount: elements[1],
@@ -412,7 +412,7 @@ func (s *decodeState) parseIEA(elements []string) error {
 
 func (s *decodeState) parseGS(elements []string) error {
 	if len(elements) < 9 {
-		return s.Errorf("GS: %w", ErrMissingElement)
+		return s.parseErrorf("GS", len(elements), "%w", ErrMissingElement)
 	}
 	s.currentFunctionGroup = &FunctionGroup{
 		Header: &GS{
@@ -432,10 +432,10 @@ func (s *decodeState) parseGS(elements []string) error {
 
 func (s *decodeState) parseGE(elements []string) error {
 	if s.currentFunctionGroup == nil {
-		return s.Errorf("%w: GE segment without GS segment", ErrInvalidFormat)
+		return s.parseErrorf("GE", 0, "%w: GE segment without GS segment", ErrInvalidFormat)
 	}
 	if len(elements) < 3 {
-		return s.Errorf("GE: %w", ErrMissingElement)
+		return s.parseErrorf("GE", len(elements), "%w", ErrMissingElement)
 	}
 	s.currentFunctionGroup.Trailer = &GE{
 		TransactionSetCount: elements[1],
@@ -446,11 +446,11 @@ func (s *decodeState) parseGE(elements []string) error {
 
 func (s *decodeState) parseST(elements []string) error {
 	if len(elements) < 3 {
-		return s.Errorf("ST: %w", ErrMissingElement)
+		return s.parseErrorf("ST", len(elements), "%w", ErrMissingElement)
 	}
 	s.considerAutomaticEnvelope()
 	if s.currentFunctionGroup == nil {
-		return s.Errorf("%w: ST segment without GS segment", ErrInvalidFormat)
+		return s.parseErrorf("ST", 0, "%w: ST segment without GS segment", ErrInvalidFormat)
 	}
 	s.currentTransaction = &Transaction{
 		Header: &ST{
@@ -467,10 +467,10 @@ func (s *decodeState) parseST(elements []string) error {
 
 func (s *decodeState) parseSE(elements []string) error {
 	if s.currentTransaction == nil {
-		return s.Errorf("%w: SE segment without ST segment", ErrInvalidFormat)
+		return s.parseErrorf("SE", 0, "%w: SE segment without ST segment", ErrInvalidFormat)
 	}
 	if len(elements) < 3 {
-		return s.Errorf("SE: %w", ErrMissingElement)
+		return s.parseErrorf("SE", len(elements), "%w", ErrMissingElement)
 	}
 	s.currentTransaction.Trailer = &SE{
 		SegmentCount:  elements[1],
@@ -482,7 +482,7 @@ func (s *decodeState) parseSE(elements []string) error {
 func (s *decodeState) parseSegment(elements []string) error {
 	segmentID, elements := s.extractSegmentID(elements)
 	if s.currentTransaction == nil {
-		return s.Errorf("%w: '%v' segment without ST segment", ErrInvalidFormat, segmentID)
+		return s.parseErrorf(segmentID, 0, "%w: segment without ST segment", ErrInvalidFormat)
 	}
 	segment := Segment{
 		ID:       segmentID,
@@ -538,8 +538,42 @@ func (s *decodeState) considerAutomaticEnvelope() {
 	s.doc.Interchange.FunctionGroups = append(s.doc.Interchange.FunctionGroups, s.currentFunctionGroup)
 }
 
-// Errorf sets the error field of the decodeState to the given error.
-func (s *decodeState) Errorf(format string, args ...any) error {
-	format = fmt.Sprintf("line %d: %s", s.lineIndex, format)
-	return fmt.Errorf(format, args...)
+// A ParseError describes a syntax error encountered while decoding an
+// X12 document. It wraps one of the package's sentinel errors, so it
+// can be matched with errors.Is, and carries the position of the
+// offending segment for inputs where line numbers are meaningless
+// (an entire interchange is often a single line).
+type ParseError struct {
+	Segment   int    // 1-based ordinal of the segment within the input
+	SegmentID string // segment ID, e.g. "ISA", if known
+	Element   int    // 1-based index of the offending element, if known
+	Err       error
+}
+
+func (e *ParseError) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "x12: segment %d", e.Segment)
+	if e.SegmentID != "" {
+		fmt.Fprintf(&b, " (%s)", e.SegmentID)
+	}
+	if e.Element > 0 {
+		fmt.Fprintf(&b, " element %d", e.Element)
+	}
+	b.WriteString(": ")
+	b.WriteString(e.Err.Error())
+	return b.String()
+}
+
+func (e *ParseError) Unwrap() error { return e.Err }
+
+// parseErrorf returns a *ParseError for the segment currently being
+// decoded. element is the 1-based index of the offending element, or 0
+// if not applicable.
+func (s *decodeState) parseErrorf(segmentID string, element int, format string, args ...any) error {
+	return &ParseError{
+		Segment:   s.lineIndex,
+		SegmentID: segmentID,
+		Element:   element,
+		Err:       fmt.Errorf(format, args...),
+	}
 }
