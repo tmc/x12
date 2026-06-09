@@ -509,6 +509,12 @@ func TestParseError(t *testing.T) {
 	if pe.Segment != 3 {
 		t.Errorf("Segment = %d, want 3", pe.Segment)
 	}
+	if pe.Element != 2 {
+		t.Errorf("Element = %d, want 2", pe.Element)
+	}
+	if got, want := err.Error(), "x12: segment 3 (SE) element 2: missing element"; got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
 
 	_, err = x12.Decode(strings.NewReader(`ISA*00*bad~`))
 	if !errors.As(err, &pe) {
@@ -751,5 +757,96 @@ func TestMarshalRejectsInvalidDelimiters(t *testing.T) {
 		if _, err := x12.Marshal(doc, opt); !errors.Is(err, x12.ErrInvalidArgument) {
 			t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
 		}
+	}
+}
+
+func TestMarshalMalformed(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  *x12.Document
+		want error
+	}{
+		{"nil document", nil, x12.ErrInvalidArgument},
+		{"nil interchange", &x12.Document{}, x12.ErrInvalidArgument},
+		{"missing ISA", &x12.Document{Interchange: &x12.Interchange{Trailer: &x12.IEA{}}}, x12.ErrInvalidFormat},
+		{"missing IEA", &x12.Document{Interchange: &x12.Interchange{Header: &x12.ISA{}}}, x12.ErrInvalidFormat},
+		{"missing GS", &x12.Document{Interchange: &x12.Interchange{
+			Header: &x12.ISA{}, Trailer: &x12.IEA{},
+			FunctionGroups: []*x12.FunctionGroup{{Trailer: &x12.GE{}}},
+		}}, x12.ErrInvalidFormat},
+		{"missing GE", &x12.Document{Interchange: &x12.Interchange{
+			Header: &x12.ISA{}, Trailer: &x12.IEA{},
+			FunctionGroups: []*x12.FunctionGroup{{Header: &x12.GS{}}},
+		}}, x12.ErrInvalidFormat},
+		{"missing ST", &x12.Document{Interchange: &x12.Interchange{
+			Header: &x12.ISA{}, Trailer: &x12.IEA{},
+			FunctionGroups: []*x12.FunctionGroup{{
+				Header: &x12.GS{}, Trailer: &x12.GE{},
+				Transactions: []*x12.Transaction{{Trailer: &x12.SE{}}},
+			}},
+		}}, x12.ErrInvalidFormat},
+		{"missing SE", &x12.Document{Interchange: &x12.Interchange{
+			Header: &x12.ISA{}, Trailer: &x12.IEA{},
+			FunctionGroups: []*x12.FunctionGroup{{
+				Header: &x12.GS{}, Trailer: &x12.GE{},
+				Transactions: []*x12.Transaction{{Header: &x12.ST{}}},
+			}},
+		}}, x12.ErrInvalidFormat},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := x12.Marshal(tt.doc); !errors.Is(err, tt.want) {
+				t.Errorf("Marshal() error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeVariableISA(t *testing.T) {
+	// A well-formed but non-canonical ISA (variable-width fields, no
+	// padding) must decode under default options and round-trip.
+	const input = `ISA*00**00**ZZ*SENDER*ZZ*RECEIVER*230101*1200*^*00501*000000001*0*P*:~` +
+		`GS*HC*S*R*20230101*1200*1*X*005010~` +
+		`ST*837*0001~NM1*41*2*ACME~SE*3*0001~` +
+		`GE*1*1~IEA*1*000000001~`
+	doc, err := x12.Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got, want := doc.Interchange.Header.SenderID, "SENDER"; got != want {
+		t.Errorf("SenderID = %q, want %q", got, want)
+	}
+	if got, want := doc.Interchange.Header.ComponentElementSeparator, ":"; got != want {
+		t.Errorf("ISA16 = %q, want %q", got, want)
+	}
+	encoded, err := x12.Marshal(doc)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if diff := cmp.Diff(input, string(encoded)); diff != "" {
+		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+	}
+
+	// Malformed ISA shapes must fail with the right sentinel.
+	const prefix = `ISA*00**00**ZZ*SENDER*ZZ*RECEIVER*230101*1200*^*00501*000000001*0*P`
+	const canonicalNoTerm = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*000000001*0*P*:`
+	tests := []struct {
+		name  string
+		input string
+		want  error
+	}{
+		{"empty ISA16", prefix + `**~`, x12.ErrMissingElement},
+		{"EOF after ISA16", prefix + `*:`, x12.ErrInvalidFormat},
+		{"terminator equals separator", prefix + `*:*`, x12.ErrInvalidFormat},
+		{"alphanumeric terminator", prefix + `*:X`, x12.ErrInvalidFormat},
+		{"unterminated ISA", `ISA*` + strings.Repeat("-", 600), x12.ErrInvalidFormat},
+		{"canonical shape with separator terminator", canonicalNoTerm + `*`, x12.ErrInvalidFormat},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := x12.Decode(strings.NewReader(tt.input)); !errors.Is(err, tt.want) {
+				t.Errorf("Decode() error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }
