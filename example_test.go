@@ -43,6 +43,15 @@ func ExampleDecode() {
 	// segments 5
 }
 
+func ExampleNewDecoder() {
+	doc, err := x12.NewDecoder(strings.NewReader(exampleEDI)).Decode()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(doc.Interchange.Header.ControlNumber)
+	// Output: 000095071
+}
+
 func ExampleMarshal() {
 	doc, err := x12.Decode(strings.NewReader(exampleEDI))
 	if err != nil {
