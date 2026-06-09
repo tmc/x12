@@ -379,3 +379,35 @@ func TestMarshalAutomaticEnvelopeGuard(t *testing.T) {
 		t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
 	}
 }
+
+func TestValidateCounts(t *testing.T) {
+	decode := func(t *testing.T) *x12.Document {
+		t.Helper()
+		doc, err := x12.Decode(strings.NewReader(exampleEDI))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	tests := []struct {
+		name   string
+		mutate func(*x12.Document)
+	}{
+		{"IEA01 mismatch", func(d *x12.Document) { d.Interchange.Trailer.FunctionalGroupCount = "2" }},
+		{"GE01 mismatch", func(d *x12.Document) { d.Interchange.FunctionGroups[0].Trailer.TransactionSetCount = "0" }},
+		{"SE01 mismatch", func(d *x12.Document) { d.Interchange.FunctionGroups[0].Transactions[0].Trailer.SegmentCount = "99" }},
+		{"SE01 not a number", func(d *x12.Document) { d.Interchange.FunctionGroups[0].Transactions[0].Trailer.SegmentCount = "x" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := decode(t)
+			if err := doc.Validate(); err != nil {
+				t.Fatalf("Validate() before mutation = %v", err)
+			}
+			tt.mutate(doc)
+			if err := doc.Validate(); !errors.Is(err, x12.ErrInvalidFormat) {
+				t.Errorf("Validate() = %v, want ErrInvalidFormat", err)
+			}
+		})
+	}
+}

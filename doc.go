@@ -34,5 +34,6 @@
 // EnvelopeAutomaticallyAdded field is set.
 //
 // Validate checks that the envelope is structurally sound: headers and
-// trailers are present, and their control numbers match.
+// trailers are present, their control numbers match, and the trailer
+// counts (IEA01, GE01, SE01) match the document's contents.
 package x12

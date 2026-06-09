@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -135,7 +136,11 @@ func (s *decodeState) processLine(line string, parsers map[string]segmentParser)
 	return parseFunc(s, elements)
 }
 
-// Validate validates the x12 document
+// Validate checks that the document's envelope is structurally sound:
+// header and trailer segments are present, their control numbers match,
+// and the trailer counts (IEA01, GE01, SE01) match the document's
+// contents. It does not validate segments against a transaction-set
+// implementation guide.
 func (doc *Document) Validate() error {
 	if doc == nil {
 		return fmt.Errorf("%w: doc nil", ErrInvalidArgument)
@@ -148,11 +153,13 @@ func (doc *Document) Validate() error {
 		return fmt.Errorf("%w: ISA segment missing", ErrInvalidFormat)
 	}
 	if doc.Interchange.Trailer == nil {
-
 		return fmt.Errorf("%w: IEA segment missing", ErrInvalidFormat)
 	}
 	if doc.Interchange.Header.ControlNumber != doc.Interchange.Trailer.ControlNumber {
 		return fmt.Errorf("%w: ISA and IEA control numbers do not match (%v != %v)", ErrInvalidFormat, doc.Interchange.Header.ControlNumber, doc.Interchange.Trailer.ControlNumber)
+	}
+	if err := checkCount("IEA01 functional group count", doc.Interchange.Trailer.FunctionalGroupCount, len(doc.Interchange.FunctionGroups)); err != nil {
+		return err
 	}
 
 	// check that the GS and GE segments are present and match
@@ -165,6 +172,9 @@ func (doc *Document) Validate() error {
 		}
 		if functionGroup.Header.ControlNumber != functionGroup.Trailer.ControlNumber {
 			return fmt.Errorf("%w: GS and GE control numbers do not match (%v != %v)", ErrInvalidFormat, functionGroup.Header.ControlNumber, functionGroup.Trailer.ControlNumber)
+		}
+		if err := checkCount("GE01 transaction set count", functionGroup.Trailer.TransactionSetCount, len(functionGroup.Transactions)); err != nil {
+			return err
 		}
 	}
 
@@ -180,7 +190,25 @@ func (doc *Document) Validate() error {
 			if transaction.Header.ControlNumber != transaction.Trailer.ControlNumber {
 				return fmt.Errorf("%w: ST and SE control numbers do not match (%v != %v)", ErrInvalidFormat, transaction.Header.ControlNumber, transaction.Trailer.ControlNumber)
 			}
+			// SE01 counts every segment in the transaction set,
+			// including the ST and SE segments themselves.
+			if err := checkCount("SE01 segment count", transaction.Trailer.SegmentCount, len(transaction.Segments)+2); err != nil {
+				return err
+			}
 		}
+	}
+	return nil
+}
+
+// checkCount verifies that a trailer count element matches the number of
+// units actually present in the document.
+func checkCount(what, value string, actual int) error {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("%w: %s %q is not a number", ErrInvalidFormat, what, value)
+	}
+	if n != actual {
+		return fmt.Errorf("%w: %s is %d, document contains %d", ErrInvalidFormat, what, n, actual)
 	}
 	return nil
 }
