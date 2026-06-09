@@ -22,6 +22,11 @@ type Encoder struct {
 }
 
 // An EncodeOption configures an Encoder.
+//
+// A delimiter passed to WithSegmentTerminator, WithElementSeparator, or
+// WithComponentSeparator must be a single non-alphanumeric byte, so the
+// output remains readable by the decoder; Encode rejects other values.
+// Passing an empty string is equivalent to not setting the option.
 type EncodeOption func(*Encoder)
 
 // WithSegmentTerminator sets the segment terminator used when encoding,
@@ -93,6 +98,20 @@ func (enc *Encoder) Encode(doc *Document) error {
 	}
 	if doc.Interchange == nil {
 		return fmt.Errorf("%w: missing interchange", ErrInvalidArgument)
+	}
+	// A configured delimiter the decoder could not rediscover would
+	// produce output this package cannot read back.
+	for _, d := range []struct{ name, value string }{
+		{"segment terminator", enc.segmentTerminator},
+		{"element separator", enc.elementSeparator},
+		{"component separator", enc.componentSeparator},
+	} {
+		if d.value == "" {
+			continue
+		}
+		if len(d.value) != 1 || isAlnum(d.value[0]) {
+			return fmt.Errorf("%w: %s must be a single non-alphanumeric byte, got %q", ErrInvalidArgument, d.name, d.value)
+		}
 	}
 	state := &encodeState{
 		w:                  enc.w,

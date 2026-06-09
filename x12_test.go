@@ -737,3 +737,19 @@ func TestMarshalDelimiterPrecedence(t *testing.T) {
 		t.Errorf("Marshal() = %q, want default delimiters (HI*BK:8901)", b)
 	}
 }
+
+func TestMarshalRejectsInvalidDelimiters(t *testing.T) {
+	doc, err := x12.Decode(strings.NewReader(exampleEDI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, opt := range []x12.EncodeOption{
+		x12.WithSegmentTerminator("~~"),
+		x12.WithElementSeparator("A"),
+		x12.WithComponentSeparator("12"),
+	} {
+		if _, err := x12.Marshal(doc, opt); !errors.Is(err, x12.ErrInvalidArgument) {
+			t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
+		}
+	}
+}
