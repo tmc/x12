@@ -21,7 +21,11 @@
 // Element values are kept as strings, exactly as they appear in the
 // input. The package does not interpret dates, times, numbers, or code
 // values, and it does not validate segments against a transaction-set
-// implementation guide.
+// implementation guide. Composite and repeated element values are not
+// split: a value containing component (ISA16) or repetition (ISA11)
+// separators is preserved verbatim, and the separators themselves are
+// available on the decoded document for callers that split values
+// further.
 //
 // # Decoding and encoding
 //

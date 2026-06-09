@@ -453,3 +453,35 @@ func TestDecodeDiscoversDelimiters(t *testing.T) {
 		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestRepetitionSeparatorRoundTrip(t *testing.T) {
+	// In 5010, ISA11 carries the repetition separator. Element values
+	// containing repetitions (here HI02) are preserved verbatim rather
+	// than split, so they survive a decode/encode round trip.
+	const input = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*000000001*0*P*:~` +
+		`GS*HC*SENDER*RECEIVER*20230101*1200*1*X*005010X222A1~` +
+		`ST*837*0001~` +
+		`HI*BK:8901^BF:87200~` +
+		`SE*3*0001~` +
+		`GE*1*1~` +
+		`IEA*1*000000001~`
+
+	doc, err := x12.Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got, want := doc.Interchange.Header.RepetitionSeparator, "^"; got != want {
+		t.Errorf("ISA11 = %q, want %q", got, want)
+	}
+	hi := doc.Interchange.FunctionGroups[0].Transactions[0].Segments[0]
+	if got, want := hi.Elements[0].Value, "BK:8901^BF:87200"; got != want {
+		t.Errorf("HI01 = %q, want %q", got, want)
+	}
+	encoded, err := x12.Marshal(doc)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if diff := cmp.Diff(input, string(encoded)); diff != "" {
+		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+	}
+}
