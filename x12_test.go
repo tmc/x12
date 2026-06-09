@@ -133,6 +133,8 @@ IEA*1*000095071~`,
 						ControlNumber:        "000095071",
 					},
 				},
+				SegmentTerminator: "~",
+				ElementSeparator:  "*",
 			},
 			validateResult: "<nil>",
 		},
@@ -407,5 +409,47 @@ func TestValidateCounts(t *testing.T) {
 				t.Errorf("Validate() = %v, want ErrInvalidFormat", err)
 			}
 		})
+	}
+}
+
+func TestDecodeDiscoversDelimiters(t *testing.T) {
+	// A canonical fixed-width ISA using | as the element separator,
+	// > as the component separator (ISA16), and newline as the
+	// segment terminator.
+	const input = "ISA|00|          |00|          |ZZ|SENDER         |ZZ|RECEIVER       |230101|1200|^|00501|000000001|0|T|>\n" +
+		"GS|HC|SENDER|RECEIVER|20230101|1200|1|X|005010\n" +
+		"ST|837|0001\n" +
+		"NM1|41|2|ACME\n" +
+		"SE|3|0001\n" +
+		"GE|1|1\n" +
+		"IEA|1|000000001\n"
+
+	doc, err := x12.Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got, want := doc.ElementSeparator, "|"; got != want {
+		t.Errorf("ElementSeparator = %q, want %q", got, want)
+	}
+	if got, want := doc.SegmentTerminator, "\n"; got != want {
+		t.Errorf("SegmentTerminator = %q, want %q", got, want)
+	}
+	if got, want := doc.Interchange.Header.RepetitionSeparator, "^"; got != want {
+		t.Errorf("ISA11 = %q, want %q", got, want)
+	}
+	if got, want := doc.Interchange.Header.ComponentElementSeparator, ">"; got != want {
+		t.Errorf("ISA16 = %q, want %q", got, want)
+	}
+	if err := doc.Validate(); err != nil {
+		t.Errorf("Validate() = %v", err)
+	}
+
+	// Encoding uses the document's own delimiters and round-trips.
+	encoded, err := x12.Marshal(doc)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if diff := cmp.Diff(input, string(encoded)); diff != "" {
+		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
 	}
 }

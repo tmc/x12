@@ -4,6 +4,15 @@ package x12
 type Document struct {
 	Interchange *Interchange
 
+	// SegmentTerminator and ElementSeparator record the delimiters
+	// discovered from the ISA segment when the document was decoded.
+	// When empty, DefaultSegmentTerminator and DefaultElementSeparator
+	// are used for encoding. The component element separator and the
+	// repetition separator are carried by the ISA itself (ISA16 and
+	// ISA11).
+	SegmentTerminator string `json:",omitempty"`
+	ElementSeparator  string `json:",omitempty"`
+
 	// EnvelopeAutomaticallyAdded is true if the envelope was automatically added to a decoded document.
 	// This may be the case if the document was decoded from a file that did not contain an ISA/IEA envelope.
 	EnvelopeAutomaticallyAdded bool

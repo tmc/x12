@@ -2,6 +2,7 @@ package x12
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,10 @@ type decodeState struct {
 	currentFunctionGroup *FunctionGroup
 	currentTransaction   *Transaction
 
+	// elementSeparator is the element separator in effect, discovered
+	// from the ISA segment when present.
+	elementSeparator string
+
 	withRelaxedSegmentIDWhitespace bool
 }
 
@@ -60,12 +65,31 @@ func NewDecoder(r io.Reader, opts ...DecodeOption) *Decoder {
 }
 
 // Decode reads the X12 document from the decoder's input.
+//
+// If the input begins with an ISA segment, the delimiters are discovered
+// from it: the element separator is the byte following the segment ID,
+// the component element separator is ISA16, and the segment terminator
+// is the byte following ISA16. Otherwise the default delimiters are
+// assumed.
 func (dec *Decoder) Decode() (*Document, error) {
 	state := initializeDecodeState(dec.opts)
 	segmentParsers := state.getSegmentParsers()
 
-	scanner := bufio.NewScanner(dec.r)
-	scanner.Split(scanEDI)
+	r := bufio.NewReader(dec.r)
+	term := DefaultSegmentTerminator[0]
+	if peek, err := r.Peek(4); err == nil && string(peek[:3]) == "ISA" && !isAlnum(peek[3]) {
+		elemSep, t, err := state.readISA(r)
+		if err != nil {
+			return nil, err
+		}
+		term = t
+		state.elementSeparator = string(elemSep)
+		state.doc.SegmentTerminator = string(t)
+		state.doc.ElementSeparator = string(elemSep)
+	}
+
+	scanner := bufio.NewScanner(r)
+	scanner.Split(scanSegments(term))
 	for scanner.Scan() {
 		if err := state.processLine(scanner.Text(), segmentParsers); err != nil {
 			return nil, err
@@ -88,9 +112,7 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 		doc: &Document{
 			Interchange: &Interchange{},
 		},
-		lineIndex:            0,
-		currentFunctionGroup: nil,
-		currentTransaction:   nil,
+		elementSeparator: DefaultElementSeparator,
 	}
 	for _, opt := range opts {
 		opt(state)
@@ -98,24 +120,148 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 	return state
 }
 
-// scanEDI is a bufio.SplitFunc that splits an EDI document into segments
-func scanEDI(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
+// isaLen is the length of a canonical fixed-width ISA segment,
+// including the segment terminator.
+const isaLen = 106
+
+// isaSeparatorOffsets are the byte offsets of the element separators in
+// a canonical fixed-width ISA segment. ISA16 occupies the byte before
+// the segment terminator at offset 105.
+var isaSeparatorOffsets = [...]int{3, 6, 17, 20, 31, 34, 50, 53, 69, 76, 81, 83, 89, 99, 101, 103}
+
+// readISA reads the ISA segment from r and discovers the document's
+// delimiters from it. It first tries the canonical fixed-width form and
+// falls back to scanning separator-delimited elements, which accepts the
+// padded variants that appear in the wild. It returns the element
+// separator and the segment terminator.
+func (s *decodeState) readISA(r *bufio.Reader) (elemSep, term byte, err error) {
+	s.lineIndex = 1
+	if buf, perr := r.Peek(isaLen); perr == nil {
+		if elements, ok := parseCanonicalISA(buf); ok {
+			if err := s.parseISA(elements); err != nil {
+				return 0, 0, err
+			}
+			elemSep, term = buf[3], buf[105]
+			if _, err := r.Discard(isaLen); err != nil {
+				return 0, 0, err
+			}
+			return elemSep, term, nil
+		}
+	}
+	return s.readISAVariable(r)
+}
+
+// parseCanonicalISA splits a canonical fixed-width ISA segment into its
+// elements. It reports ok=false if buf is not such a segment.
+func parseCanonicalISA(buf []byte) (elements []string, ok bool) {
+	sep := buf[3]
+	if isAlnum(sep) {
+		return nil, false
+	}
+	for _, off := range isaSeparatorOffsets {
+		if buf[off] != sep {
+			return nil, false
+		}
+	}
+	if buf[105] == sep {
+		return nil, false
+	}
+	elements = make([]string, 0, 17)
+	elements = append(elements, "ISA")
+	for i, off := range isaSeparatorOffsets[:len(isaSeparatorOffsets)-1] {
+		elements = append(elements, string(buf[off+1:isaSeparatorOffsets[i+1]]))
+	}
+	elements = append(elements, string(buf[104:105])) // ISA16
+	return elements, true
+}
+
+// readISAVariable reads an ISA segment of non-canonical shape: elements
+// may have any width, but there must be 16 of them, ISA16 must be a
+// single byte, and the byte after ISA16 is the segment terminator.
+func (s *decodeState) readISAVariable(r *bufio.Reader) (elemSep, term byte, err error) {
+	if _, err := r.Discard(3); err != nil { // the "ISA" segment ID
+		return 0, 0, err
+	}
+	b, err := r.ReadByte()
+	if err != nil {
+		return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+	}
+	if b == ' ' || b == '\t' {
+		if !s.withRelaxedSegmentIDWhitespace {
+			return 0, 0, s.Errorf("%w: whitespace after ISA segment ID (use WithRelaxedSegmentIDWhitespace)", ErrInvalidFormat)
+		}
+		for b == ' ' || b == '\t' {
+			if b, err = r.ReadByte(); err != nil {
+				return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+			}
+		}
+	}
+	sep := b
+	if isAlnum(sep) {
+		return 0, 0, s.Errorf("%w: invalid ISA element separator %q", ErrInvalidFormat, sep)
+	}
+	elements := []string{"ISA"}
+	var field []byte
+	for n := 0; len(elements) < 16; n++ {
+		if n > 512 {
+			return 0, 0, s.Errorf("%w: unterminated ISA segment", ErrInvalidFormat)
+		}
+		b, err := r.ReadByte()
+		if err != nil {
+			return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+		}
+		switch b {
+		case sep:
+			elements = append(elements, string(field))
+			field = field[:0]
+		case '\r', '\n':
+			// A newline inside the ISA means we ran past the end of
+			// the segment without finding all of its elements.
+			return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+		default:
+			field = append(field, b)
+		}
+	}
+	isa16, err := r.ReadByte()
+	if err != nil || isa16 == sep || isa16 == '\r' || isa16 == '\n' {
+		return 0, 0, s.Errorf("ISA: %w", ErrMissingElement)
+	}
+	elements = append(elements, string(isa16))
+	term, err = r.ReadByte()
+	if err != nil {
+		return 0, 0, s.Errorf("%w: unterminated ISA segment", ErrInvalidFormat)
+	}
+	if term == sep || isAlnum(term) {
+		return 0, 0, s.Errorf("%w: invalid segment terminator %q", ErrInvalidFormat, term)
+	}
+	if err := s.parseISA(elements); err != nil {
+		return 0, 0, err
+	}
+	return sep, term, nil
+}
+
+func isAlnum(b byte) bool {
+	return 'A' <= b && b <= 'Z' || 'a' <= b && b <= 'z' || '0' <= b && b <= '9'
+}
+
+// scanSegments returns a bufio.SplitFunc that splits an EDI document
+// into segments on the given segment terminator.
+func scanSegments(term byte) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		if i := bytes.IndexByte(data, term); i >= 0 {
+			// We have a full segment.
+			return i + 1, data[0:i], nil
+		}
+		// If we're at EOF, we have a final, non-empty, non-terminated segment. Return it.
+		if atEOF {
+			return len(data), data, nil
+		}
+		// Request more data.
 		return 0, nil, nil
 	}
-
-	if i := strings.Index(string(data), DefaultSegmentTerminator); i >= 0 {
-		// We have a full segment
-		return i + 1, data[0:i], nil
-	}
-
-	// If we're at EOF, we have a final, non-empty, non-terminated segment. Return it.
-	if atEOF {
-		return len(data), data, nil
-	}
-
-	// Request more data.
-	return 0, nil, nil
 }
 
 func (s *decodeState) processLine(line string, parsers map[string]segmentParser) error {
@@ -125,7 +271,7 @@ func (s *decodeState) processLine(line string, parsers map[string]segmentParser)
 		return nil
 	}
 
-	elements := strings.Split(segment, DefaultElementSeparator)
+	elements := strings.Split(segment, s.elementSeparator)
 	segmentID, _ := s.extractSegmentID(elements)
 
 	parseFunc, exists := parsers[segmentID]
@@ -372,7 +518,7 @@ func (s *decodeState) considerAutomaticEnvelope() {
 	s.doc.EnvelopeAutomaticallyAdded = true
 	s.doc.Interchange.Header = &ISA{
 		ControlNumber:             "000000001",
-		ComponentElementSeparator: DefaultElementSeparator,
+		ComponentElementSeparator: DefaultComponentSeparator,
 	}
 
 	s.doc.Interchange.Trailer = &IEA{

@@ -512,7 +512,7 @@ func Test_parseElements(t *testing.T) {
 	}
 }
 
-func Test_scanEDI(t *testing.T) {
+func Test_scanSegments(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
@@ -538,7 +538,7 @@ func Test_scanEDI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner := bufio.NewScanner(strings.NewReader(tt.input))
-			scanner.Split(scanEDI)
+			scanner.Split(scanSegments('~'))
 
 			var segments []string
 			for scanner.Scan() {
@@ -546,10 +546,10 @@ func Test_scanEDI(t *testing.T) {
 			}
 
 			if err := scanner.Err(); !errors.Is(err, tt.wantErr) {
-				t.Errorf("scanEDI() error = %v, want %v", err, tt.wantErr)
+				t.Errorf("scanSegments() error = %v, want %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.want, segments); diff != "" {
-				t.Errorf("scanEDI() mismatch (-want +got):\n%s", diff)
+				t.Errorf("scanSegments() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
