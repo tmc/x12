@@ -41,6 +41,7 @@ type decodeState struct {
 	elementSeparator string
 
 	withRelaxedSegmentIDWhitespace bool
+	strictSegments                 bool
 }
 
 // DecodeOption is a function that can be used to configure the decoder.
@@ -50,6 +51,17 @@ type DecodeOption func(*decodeState)
 func WithRelaxedSegmentIDWhitespace() DecodeOption {
 	return func(state *decodeState) {
 		state.withRelaxedSegmentIDWhitespace = true
+	}
+}
+
+// WithStrictSegments rejects data segments that the decoder would
+// otherwise absorb silently: segments whose ID does not look like an
+// X12 segment identifier (two or three characters, an uppercase letter
+// followed by uppercase letters or digits), and segments that appear
+// after a transaction's SE trailer.
+func WithStrictSegments() DecodeOption {
+	return func(state *decodeState) {
+		state.strictSegments = true
 	}
 }
 
@@ -484,12 +496,39 @@ func (s *decodeState) parseSegment(elements []string) error {
 	if s.currentTransaction == nil {
 		return s.parseErrorf(segmentID, 0, "%w: segment without ST segment", ErrInvalidFormat)
 	}
+	if s.strictSegments {
+		if !isValidSegmentID(segmentID) {
+			return s.parseErrorf(segmentID, 0, "%w: invalid segment ID %q", ErrInvalidFormat, segmentID)
+		}
+		if s.currentTransaction.Trailer != nil {
+			return s.parseErrorf(segmentID, 0, "%w: segment after SE trailer", ErrInvalidFormat)
+		}
+	}
 	segment := Segment{
 		ID:       segmentID,
 		Elements: parseElements(elements),
 	}
 	s.currentTransaction.Segments = append(s.currentTransaction.Segments, segment)
 	return nil
+}
+
+// isValidSegmentID reports whether id looks like an X12 segment
+// identifier: two or three characters, an uppercase letter followed by
+// uppercase letters or digits.
+func isValidSegmentID(id string) bool {
+	if len(id) < 2 || len(id) > 3 {
+		return false
+	}
+	if id[0] < 'A' || id[0] > 'Z' {
+		return false
+	}
+	for i := 1; i < len(id); i++ {
+		b := id[i]
+		if !('A' <= b && b <= 'Z' || '0' <= b && b <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func parseElements(elements []string) []Element {

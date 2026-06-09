@@ -216,7 +216,7 @@ func TestRoundtripping(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer f.Close()
-			var opts []x12.DecodeOption
+			opts := []x12.DecodeOption{x12.WithStrictSegments()}
 			if optMap[file.Name()].RelaxedWhitespace {
 				opts = append(opts, x12.WithRelaxedSegmentIDWhitespace())
 			}
@@ -513,5 +513,33 @@ func TestParseError(t *testing.T) {
 	}
 	if pe.SegmentID != "ISA" {
 		t.Errorf("SegmentID = %q, want %q", pe.SegmentID, "ISA")
+	}
+}
+
+func TestDecodeStrictSegments(t *testing.T) {
+	// By default the decoder absorbs any segment into the current
+	// transaction; WithStrictSegments rejects suspicious ones.
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "invalid segment ID",
+			input: `ST*837*0001~nm1*41*2*ACME~SE*3*0001~`,
+		},
+		{
+			name:  "segment after SE trailer",
+			input: `ST*837*0001~NM1*41*2*ACME~SE*3*0001~REF*EV*X~`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := x12.Decode(strings.NewReader(tt.input)); err != nil {
+				t.Fatalf("Decode() relaxed = %v, want nil", err)
+			}
+			if _, err := x12.Decode(strings.NewReader(tt.input), x12.WithStrictSegments()); !errors.Is(err, x12.ErrInvalidFormat) {
+				t.Errorf("Decode() strict error = %v, want ErrInvalidFormat", err)
+			}
+		})
 	}
 }
