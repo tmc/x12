@@ -282,6 +282,11 @@ IEA*1*191511902~`
 	if got, want := doc.Interchange.Header.ControlNumber, "191511902 "; got != want {
 		t.Errorf("ISA13 = %q, want %q", got, want)
 	}
+	// ISA13 is space-padded while IEA02 is not; Validate must treat
+	// them as matching.
+	if err := doc.Validate(); err != nil {
+		t.Errorf("Validate() = %v", err)
+	}
 }
 
 func TestDecodeAutomaticEnvelope(t *testing.T) {

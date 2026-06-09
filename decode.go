@@ -336,7 +336,7 @@ func (doc *Document) Validate() error {
 	if doc.Interchange.Trailer == nil {
 		return fmt.Errorf("%w: IEA segment missing", ErrInvalidFormat)
 	}
-	if doc.Interchange.Header.ControlNumber != doc.Interchange.Trailer.ControlNumber {
+	if !controlNumbersMatch(doc.Interchange.Header.ControlNumber, doc.Interchange.Trailer.ControlNumber) {
 		return fmt.Errorf("%w: ISA and IEA control numbers do not match (%v != %v)", ErrInvalidFormat, doc.Interchange.Header.ControlNumber, doc.Interchange.Trailer.ControlNumber)
 	}
 	if err := checkCount("IEA01 functional group count", doc.Interchange.Trailer.FunctionalGroupCount, len(doc.Interchange.FunctionGroups)); err != nil {
@@ -351,7 +351,7 @@ func (doc *Document) Validate() error {
 		if functionGroup.Trailer == nil {
 			return fmt.Errorf("%w: GE segment missing", ErrInvalidFormat)
 		}
-		if functionGroup.Header.ControlNumber != functionGroup.Trailer.ControlNumber {
+		if !controlNumbersMatch(functionGroup.Header.ControlNumber, functionGroup.Trailer.ControlNumber) {
 			return fmt.Errorf("%w: GS and GE control numbers do not match (%v != %v)", ErrInvalidFormat, functionGroup.Header.ControlNumber, functionGroup.Trailer.ControlNumber)
 		}
 		if err := checkCount("GE01 transaction set count", functionGroup.Trailer.TransactionSetCount, len(functionGroup.Transactions)); err != nil {
@@ -368,7 +368,7 @@ func (doc *Document) Validate() error {
 			if transaction.Trailer == nil {
 				return fmt.Errorf("%w: SE segment missing", ErrInvalidFormat)
 			}
-			if transaction.Header.ControlNumber != transaction.Trailer.ControlNumber {
+			if !controlNumbersMatch(transaction.Header.ControlNumber, transaction.Trailer.ControlNumber) {
 				return fmt.Errorf("%w: ST and SE control numbers do not match (%v != %v)", ErrInvalidFormat, transaction.Header.ControlNumber, transaction.Trailer.ControlNumber)
 			}
 			// SE01 counts every segment in the transaction set,
@@ -379,6 +379,13 @@ func (doc *Document) Validate() error {
 		}
 	}
 	return nil
+}
+
+// controlNumbersMatch compares control numbers ignoring surrounding
+// whitespace: ISA13 is a fixed-width field and may carry padding that
+// its IEA02 counterpart lacks.
+func controlNumbersMatch(a, b string) bool {
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
 // checkCount verifies that a trailer count element matches the number of
