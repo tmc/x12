@@ -478,6 +478,12 @@ func (s *decodeState) parseST(elements []string) error {
 	if s.currentFunctionGroup == nil {
 		return s.parseErrorf("ST", 0, "%w: ST segment without GS segment", ErrInvalidFormat)
 	}
+	if s.doc.EnvelopeAutomaticallyAdded && len(s.currentFunctionGroup.Transactions) > 0 {
+		// The synthesized envelope declares exactly one transaction
+		// (and Encode emits only one); accepting more would produce a
+		// document that fails its own Validate.
+		return s.parseErrorf("ST", 0, "%w: multiple transaction sets without an interchange envelope", ErrInvalidFormat)
+	}
 	s.currentTransaction = &Transaction{
 		Header: &ST{
 			IDCode:        elements[1],

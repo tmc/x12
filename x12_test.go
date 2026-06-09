@@ -562,3 +562,18 @@ func TestDecodeRejectsMultipleInterchanges(t *testing.T) {
 		t.Errorf("Decode() error = %v, want *ParseError on ISA", err)
 	}
 }
+
+func TestDecodeAutomaticEnvelopeSingleTransaction(t *testing.T) {
+	// The synthesized envelope declares exactly one transaction set, so
+	// envelope-less input with a second ST must be rejected rather than
+	// decoded into a document that fails its own Validate.
+	const input = `ST*837*0001~NM1*41*2*ACME~SE*3*0001~ST*837*0002~SE*2*0002~`
+	_, err := x12.Decode(strings.NewReader(input))
+	if !errors.Is(err, x12.ErrInvalidFormat) {
+		t.Errorf("Decode() error = %v, want ErrInvalidFormat", err)
+	}
+	var pe *x12.ParseError
+	if !errors.As(err, &pe) || pe.SegmentID != "ST" || pe.Segment != 4 {
+		t.Errorf("Decode() error = %+v, want *ParseError{SegmentID: ST, Segment: 4}", err)
+	}
+}
