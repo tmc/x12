@@ -151,8 +151,8 @@ func (doc *Document) Validate() error {
 
 		return fmt.Errorf("%w: IEA segment missing", ErrInvalidFormat)
 	}
-	if doc.Interchange.Header.InterchangeControlNumber != doc.Interchange.Trailer.InterchangeControlNumber {
-		return fmt.Errorf("%w: ISA and IEA control numbers do not match (%v != %v)", ErrInvalidFormat, doc.Interchange.Header.InterchangeControlNumber, doc.Interchange.Trailer.InterchangeControlNumber)
+	if doc.Interchange.Header.ControlNumber != doc.Interchange.Trailer.ControlNumber {
+		return fmt.Errorf("%w: ISA and IEA control numbers do not match (%v != %v)", ErrInvalidFormat, doc.Interchange.Header.ControlNumber, doc.Interchange.Trailer.ControlNumber)
 	}
 
 	// check that the GS and GE segments are present and match
@@ -163,8 +163,8 @@ func (doc *Document) Validate() error {
 		if functionGroup.Trailer == nil {
 			return fmt.Errorf("%w: GE segment missing", ErrInvalidFormat)
 		}
-		if functionGroup.Header.GroupControlNumber != functionGroup.Trailer.GroupControlNumber {
-			return fmt.Errorf("%w: GS and GE control numbers do not match (%v != %v)", ErrInvalidFormat, functionGroup.Header.GroupControlNumber, functionGroup.Trailer.GroupControlNumber)
+		if functionGroup.Header.ControlNumber != functionGroup.Trailer.ControlNumber {
+			return fmt.Errorf("%w: GS and GE control numbers do not match (%v != %v)", ErrInvalidFormat, functionGroup.Header.ControlNumber, functionGroup.Trailer.ControlNumber)
 		}
 	}
 
@@ -177,8 +177,8 @@ func (doc *Document) Validate() error {
 			if transaction.Trailer == nil {
 				return fmt.Errorf("%w: SE segment missing", ErrInvalidFormat)
 			}
-			if transaction.Header.TransactionSetControlNumber != transaction.Trailer.TransactionSetControlNumber {
-				return fmt.Errorf("%w: ST and SE control numbers do not match (%v != %v)", ErrInvalidFormat, transaction.Header.TransactionSetControlNumber, transaction.Trailer.TransactionSetControlNumber)
+			if transaction.Header.ControlNumber != transaction.Trailer.ControlNumber {
+				return fmt.Errorf("%w: ST and SE control numbers do not match (%v != %v)", ErrInvalidFormat, transaction.Header.ControlNumber, transaction.Trailer.ControlNumber)
 			}
 		}
 	}
@@ -205,22 +205,22 @@ func (s *decodeState) parseISA(elements []string) error {
 		return s.Errorf("ISA: %w", ErrMissingElement)
 	}
 	s.doc.Interchange.Header = &ISA{
-		AuthorizationInfoQualifier:     elements[1],
-		AuthorizationInformation:       elements[2],
-		SecurityInfoQualifier:          elements[3],
-		SecurityInfo:                   elements[4],
-		InterchangeSenderIDQualifier:   elements[5],
-		InterchangeSenderID:            elements[6],
-		InterchangeReceiverIDQualifier: elements[7],
-		InterchangeReceiverID:          elements[8],
-		InterchangeDate:                elements[9],
-		InterchangeTime:                elements[10],
-		RepetitionSeparator:            elements[11],
-		InterchangeControlVersion:      elements[12],
-		InterchangeControlNumber:       elements[13],
-		AcknowledgmentRequested:        elements[14],
-		UsageIndicator:                 elements[15],
-		ComponentElementSeparator:      elements[16],
+		AuthorizationInfoQualifier: elements[1],
+		AuthorizationInformation:   elements[2],
+		SecurityInfoQualifier:      elements[3],
+		SecurityInfo:               elements[4],
+		SenderIDQualifier:          elements[5],
+		SenderID:                   elements[6],
+		ReceiverIDQualifier:        elements[7],
+		ReceiverID:                 elements[8],
+		Date:                       elements[9],
+		Time:                       elements[10],
+		RepetitionSeparator:        elements[11],
+		Version:                    elements[12],
+		ControlNumber:              elements[13],
+		AcknowledgmentRequested:    elements[14],
+		UsageIndicator:             elements[15],
+		ComponentElementSeparator:  elements[16],
 	}
 	return nil
 }
@@ -230,8 +230,8 @@ func (s *decodeState) parseIEA(elements []string) error {
 		return s.Errorf("IEA: %w", ErrMissingElement)
 	}
 	s.doc.Interchange.Trailer = &IEA{
-		NumberOfIncludedFunctionalGroups: elements[1],
-		InterchangeControlNumber:         elements[2],
+		FunctionalGroupCount: elements[1],
+		ControlNumber:        elements[2],
 	}
 	return nil
 }
@@ -242,14 +242,14 @@ func (s *decodeState) parseGS(elements []string) error {
 	}
 	s.currentFunctionGroup = &FunctionGroup{
 		Header: &GS{
-			FunctionalIDCode:         elements[1],
-			ApplicationSenderCode:    elements[2],
-			ApplicationReceiverCode:  elements[3],
-			Date:                     elements[4],
-			Time:                     elements[5],
-			GroupControlNumber:       elements[6],
-			ResponsibleAgencyCode:    elements[7],
-			VersionReleaseIndustryID: elements[8],
+			FunctionalIDCode:      elements[1],
+			SenderCode:            elements[2],
+			ReceiverCode:          elements[3],
+			Date:                  elements[4],
+			Time:                  elements[5],
+			ControlNumber:         elements[6],
+			ResponsibleAgencyCode: elements[7],
+			Version:               elements[8],
 		},
 	}
 	s.doc.Interchange.FunctionGroups = append(s.doc.Interchange.FunctionGroups, s.currentFunctionGroup)
@@ -264,8 +264,8 @@ func (s *decodeState) parseGE(elements []string) error {
 		return s.Errorf("GE: %w", ErrMissingElement)
 	}
 	s.currentFunctionGroup.Trailer = &GE{
-		NumberOfIncludedTransactionSets: elements[1],
-		GroupControlNumber:              elements[2],
+		TransactionSetCount: elements[1],
+		ControlNumber:       elements[2],
 	}
 	return nil
 }
@@ -280,8 +280,8 @@ func (s *decodeState) parseST(elements []string) error {
 	}
 	s.currentTransaction = &Transaction{
 		Header: &ST{
-			TransactionSetIDCode:        elements[1],
-			TransactionSetControlNumber: elements[2],
+			IDCode:        elements[1],
+			ControlNumber: elements[2],
 		},
 	}
 	if len(elements) > 3 {
@@ -299,8 +299,8 @@ func (s *decodeState) parseSE(elements []string) error {
 		return s.Errorf("SE: %w", ErrMissingElement)
 	}
 	s.currentTransaction.Trailer = &SE{
-		NumberOfIncludedSegments:    elements[1],
-		TransactionSetControlNumber: elements[2],
+		SegmentCount:  elements[1],
+		ControlNumber: elements[2],
 	}
 	return nil
 }
@@ -343,22 +343,22 @@ func (s *decodeState) considerAutomaticEnvelope() {
 
 	s.doc.EnvelopeAutomaticallyAdded = true
 	s.doc.Interchange.Header = &ISA{
-		InterchangeControlNumber:  "000000001",
+		ControlNumber:             "000000001",
 		ComponentElementSeparator: ElementSeparator,
 	}
 
 	s.doc.Interchange.Trailer = &IEA{
-		NumberOfIncludedFunctionalGroups: "1",
-		InterchangeControlNumber:         "000000001",
+		FunctionalGroupCount: "1",
+		ControlNumber:        "000000001",
 	}
 
 	s.currentFunctionGroup = &FunctionGroup{
 		Header: &GS{
-			GroupControlNumber: "000000001",
+			ControlNumber: "000000001",
 		},
 		Trailer: &GE{
-			NumberOfIncludedTransactionSets: "1",
-			GroupControlNumber:              "000000001",
+			TransactionSetCount: "1",
+			ControlNumber:       "000000001",
 		},
 	}
 	s.doc.Interchange.FunctionGroups = append(s.doc.Interchange.FunctionGroups, s.currentFunctionGroup)

@@ -72,15 +72,15 @@ func (m *Marshaler) encodeISA(h *ISA, builder *strings.Builder) {
 		h.AuthorizationInformation,
 		h.SecurityInfoQualifier,
 		h.SecurityInfo,
-		h.InterchangeSenderIDQualifier,
-		h.InterchangeSenderID,
-		h.InterchangeReceiverIDQualifier,
-		h.InterchangeReceiverID,
-		h.InterchangeDate,
-		h.InterchangeTime,
+		h.SenderIDQualifier,
+		h.SenderID,
+		h.ReceiverIDQualifier,
+		h.ReceiverID,
+		h.Date,
+		h.Time,
 		h.RepetitionSeparator,
-		h.InterchangeControlVersion,
-		h.InterchangeControlNumber,
+		h.Version,
+		h.ControlNumber,
 		h.AcknowledgmentRequested,
 		h.UsageIndicator,
 		h.ComponentElementSeparator,
@@ -92,8 +92,8 @@ func (m *Marshaler) encodeISA(h *ISA, builder *strings.Builder) {
 func (m *Marshaler) encodeIEA(t *IEA, builder *strings.Builder) {
 	elements := []string{
 		"IEA",
-		t.NumberOfIncludedFunctionalGroups,
-		t.InterchangeControlNumber,
+		t.FunctionalGroupCount,
+		t.ControlNumber,
 	}
 	builder.WriteString(strings.Join(elements, m.es()))
 	builder.WriteString(m.ss())
@@ -117,13 +117,13 @@ func (m *Marshaler) encodeGS(h *GS, builder *strings.Builder) {
 	elements := []string{
 		"GS",
 		h.FunctionalIDCode,
-		h.ApplicationSenderCode,
-		h.ApplicationReceiverCode,
+		h.SenderCode,
+		h.ReceiverCode,
 		h.Date,
 		h.Time,
-		h.GroupControlNumber,
+		h.ControlNumber,
 		h.ResponsibleAgencyCode,
-		h.VersionReleaseIndustryID,
+		h.Version,
 	}
 	builder.WriteString(strings.Join(elements, m.es()))
 	builder.WriteString(m.ss())
@@ -132,8 +132,8 @@ func (m *Marshaler) encodeGS(h *GS, builder *strings.Builder) {
 func (m *Marshaler) encodeGE(t *GE, builder *strings.Builder) {
 	elements := []string{
 		"GE",
-		t.NumberOfIncludedTransactionSets,
-		t.GroupControlNumber,
+		t.TransactionSetCount,
+		t.ControlNumber,
 	}
 	builder.WriteString(strings.Join(elements, m.es()))
 	builder.WriteString(m.ss())
@@ -142,8 +142,8 @@ func (m *Marshaler) encodeGE(t *GE, builder *strings.Builder) {
 func (m *Marshaler) encodeST(h *ST, builder *strings.Builder) {
 	elements := []string{
 		"ST",
-		h.TransactionSetIDCode,
-		h.TransactionSetControlNumber,
+		h.IDCode,
+		h.ControlNumber,
 	}
 	if h.ImplementationConventionReference != "" {
 		elements = append(elements, h.ImplementationConventionReference)
@@ -155,8 +155,8 @@ func (m *Marshaler) encodeST(h *ST, builder *strings.Builder) {
 func (m *Marshaler) encodeSE(t *SE, builder *strings.Builder) {
 	elements := []string{
 		"SE",
-		t.NumberOfIncludedSegments,
-		t.TransactionSetControlNumber,
+		t.SegmentCount,
+		t.ControlNumber,
 	}
 	builder.WriteString(strings.Join(elements, m.es()))
 	builder.WriteString(m.ss())

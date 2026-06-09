@@ -18,16 +18,16 @@ type Interchange struct {
 
 // ISA is the Interchange Control Header.
 type ISA struct {
-	AuthorizationInfoQualifier     string
-	AuthorizationInformation       string
-	SecurityInfoQualifier          string
-	SecurityInfo                   string
-	InterchangeSenderIDQualifier   string
-	InterchangeSenderID            string
-	InterchangeReceiverIDQualifier string
-	InterchangeReceiverID          string
-	InterchangeDate                string
-	InterchangeTime                string
+	AuthorizationInfoQualifier string // ISA01
+	AuthorizationInformation   string // ISA02
+	SecurityInfoQualifier      string // ISA03
+	SecurityInfo               string // ISA04
+	SenderIDQualifier          string // ISA05
+	SenderID                   string // ISA06
+	ReceiverIDQualifier        string // ISA07
+	ReceiverID                 string // ISA08
+	Date                       string // ISA09, YYMMDD
+	Time                       string // ISA10, HHMM
 
 	// RepetitionSeparator is ISA11. In version 5010 and later it holds
 	// the repetition separator (commonly "^"). In earlier versions the
@@ -36,17 +36,17 @@ type ISA struct {
 	// either way.
 	RepetitionSeparator string
 
-	InterchangeControlVersion string
-	InterchangeControlNumber  string
-	AcknowledgmentRequested   string
-	UsageIndicator            string
-	ComponentElementSeparator string
+	Version                   string // ISA12, e.g. "00501"
+	ControlNumber             string // ISA13
+	AcknowledgmentRequested   string // ISA14
+	UsageIndicator            string // ISA15, "P" production or "T" test
+	ComponentElementSeparator string // ISA16
 }
 
 // IEA is the Interchange Control Trailer.
 type IEA struct {
-	NumberOfIncludedFunctionalGroups string
-	InterchangeControlNumber         string
+	FunctionalGroupCount string // IEA01
+	ControlNumber        string // IEA02
 }
 
 // FunctionGroup is a group of transactions.
@@ -58,20 +58,20 @@ type FunctionGroup struct {
 
 // GS is the Functional Group Header.
 type GS struct {
-	FunctionalIDCode         string
-	ApplicationSenderCode    string
-	ApplicationReceiverCode  string
-	Date                     string
-	Time                     string
-	GroupControlNumber       string
-	ResponsibleAgencyCode    string
-	VersionReleaseIndustryID string
+	FunctionalIDCode      string // GS01
+	SenderCode            string // GS02
+	ReceiverCode          string // GS03
+	Date                  string // GS04, CCYYMMDD
+	Time                  string // GS05, HHMM
+	ControlNumber         string // GS06
+	ResponsibleAgencyCode string // GS07
+	Version               string // GS08, e.g. "005010X222A1"
 }
 
 // GE is the Functional Group Trailer.
 type GE struct {
-	NumberOfIncludedTransactionSets string
-	GroupControlNumber              string
+	TransactionSetCount string // GE01
+	ControlNumber       string // GE02
 }
 
 // Transaction is a single transaction.
@@ -83,15 +83,15 @@ type Transaction struct {
 
 // ST is the Transaction Set Header.
 type ST struct {
-	TransactionSetIDCode              string
-	TransactionSetControlNumber       string
-	ImplementationConventionReference string
+	IDCode                            string // ST01, e.g. "837"
+	ControlNumber                     string // ST02
+	ImplementationConventionReference string // ST03
 }
 
 // SE is the Transaction Set Trailer.
 type SE struct {
-	NumberOfIncludedSegments    string
-	TransactionSetControlNumber string
+	SegmentCount  string // SE01, includes the ST and SE segments
+	ControlNumber string // SE02
 }
 
 // Segment is a single segment.

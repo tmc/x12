@@ -26,7 +26,7 @@ func Example() {
 		log.Fatal(err)
 	}
 	st := doc.Interchange.FunctionGroups[0].Transactions[0].Header
-	fmt.Println(st.TransactionSetIDCode, st.TransactionSetControlNumber)
+	fmt.Println(st.IDCode, st.ControlNumber)
 	// Output: 824 021390001
 }
 
@@ -35,7 +35,7 @@ func ExampleDecode() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("sender %q\n", doc.Interchange.Header.InterchangeSenderID)
+	fmt.Printf("sender %q\n", doc.Interchange.Header.SenderID)
 	fmt.Printf("segments %d\n", len(doc.Interchange.FunctionGroups[0].Transactions[0].Segments))
 	// Output:
 	// sender "9254110060     "
