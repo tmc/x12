@@ -256,3 +256,23 @@ func TestRoundtripping(t *testing.T) {
 func normalizeLineEndings(input string) string {
 	return strings.ReplaceAll(input, "\r\n", "\n")
 }
+
+func TestMarshalNilInterchangeDoesNotPanic(t *testing.T) {
+	// Regression: a document decoded from input lacking an ISA envelope (e.g.
+	// beginning with GS) leaves Interchange.Header nil; Marshal must return an
+	// error instead of panicking. See github.com/tmc/x12/issues/9.
+	in := "GS*HC*SENDER*RECEIVER*20260101*1200*1*X*005010~ST*837*0001~SE*1*0001~GE*1*1~"
+	doc, err := x12.Decode(strings.NewReader(in))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if _, err := (&x12.Marshaler{}).Marshal(doc); err == nil {
+		t.Fatal("Marshal() of a document with a nil ISA header: got nil error, want error")
+	}
+
+	// A nil document and a document with a nil Interchange must also be safe.
+	if _, err := (&x12.Marshaler{}).Marshal(&x12.X12Document{}); err == nil {
+		t.Fatal("Marshal() of a document with a nil Interchange: got nil error, want error")
+	}
+}
