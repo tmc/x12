@@ -1,6 +1,7 @@
 package x12_test
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -615,5 +616,21 @@ func TestDecodeLeadingTerminator(t *testing.T) {
 	}
 	if !doc.EnvelopeAutomaticallyAdded {
 		t.Error("EnvelopeAutomaticallyAdded = false, want true")
+	}
+}
+
+func TestDecodeLargeSegment(t *testing.T) {
+	// Segments over bufio.Scanner's 64KB default must still decode; ones
+	// over the package's 1MB bound must fail with a wrapped, identifiable
+	// error rather than a bare scanner error.
+	build := func(n int) string {
+		return `ST*837*0001~NM1*41*2*` + strings.Repeat("A", n) + `~SE*3*0001~`
+	}
+	if _, err := x12.Decode(strings.NewReader(build(100 << 10))); err != nil {
+		t.Errorf("Decode(100KB segment) = %v, want nil", err)
+	}
+	_, err := x12.Decode(strings.NewReader(build(2 << 20)))
+	if !errors.Is(err, bufio.ErrTooLong) {
+		t.Errorf("Decode(2MB segment) error = %v, want bufio.ErrTooLong", err)
 	}
 }

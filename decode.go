@@ -103,6 +103,7 @@ func (dec *Decoder) Decode() (*Document, error) {
 	}
 
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(nil, maxSegmentSize)
 	scanner.Split(scanSegments(term))
 	for scanner.Scan() {
 		if err := state.processLine(scanner.Text(), segmentParsers); err != nil {
@@ -111,7 +112,7 @@ func (dec *Decoder) Decode() (*Document, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("x12: segment %d: %w", state.lineIndex+1, err)
 	}
 	if state.lineIndex == 0 {
 		return nil, io.EOF
@@ -143,6 +144,11 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 // isaLen is the length of a canonical fixed-width ISA segment,
 // including the segment terminator.
 const isaLen = 106
+
+// maxSegmentSize bounds a single segment. A segment this large almost
+// always means the segment terminator was wrong, not that the data is
+// real; exceeding it surfaces as a wrapped bufio.ErrTooLong.
+const maxSegmentSize = 1 << 20
 
 // isaSeparatorOffsets are the byte offsets of the element separators in
 // a canonical fixed-width ISA segment. ISA16 occupies the byte before
