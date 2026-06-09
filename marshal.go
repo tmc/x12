@@ -180,9 +180,6 @@ func (m *Marshaler) encodeElement(e Element) string {
 	if e.Components == nil {
 		return e.Value
 	}
-	elements := []string{e.Value}
-	for _, s := range e.Components {
-		elements = append(elements, s)
-	}
+	elements := append([]string{e.Value}, e.Components...)
 	return strings.Join(elements, m.ses())
 }
