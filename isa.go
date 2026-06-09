@@ -38,3 +38,20 @@ var codeToHumanMap = map[string]string{
 	"ISA08_33": interchangeIDCodeToDefinition["33"],
 	"ISA08_ZZ": interchangeIDCodeToDefinition["ZZ"],
 }
+
+// ISAElementDescription returns the human-readable description of a coded ISA
+// element value. elementID is the ISA element identifier (for example "ISA06")
+// and code is the value found in that element (for example "ZZ"). The boolean
+// is false when no description is known for the given element and code.
+func ISAElementDescription(elementID, code string) (string, bool) {
+	desc, ok := codeToHumanMap[elementID+"_"+code]
+	return desc, ok
+}
+
+// InterchangeIDQualifierDescription returns the human-readable definition of an
+// ISA05/ISA07 interchange ID qualifier code (for example "ZZ" -> "Mutually
+// Defined"). The boolean is false when the code is unknown.
+func InterchangeIDQualifierDescription(code string) (string, bool) {
+	desc, ok := interchangeIDCodeToDefinition[code]
+	return desc, ok
+}
