@@ -2,9 +2,11 @@ package x12
 
 import (
 	"bufio"
-	"reflect"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func Test_decodeState_extractSegmentID(t *testing.T) {
@@ -34,8 +36,8 @@ func Test_decodeState_extractSegmentID(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("extractSegmentID() got = %v, want %v", got, tt.want)
 			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("extractSegmentID() got1 = %v, want %v", got1, tt.want1)
+			if diff := cmp.Diff(tt.want1, got1); diff != "" {
+				t.Errorf("extractSegmentID() elements mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -47,47 +49,43 @@ func Test_decodeState_parseGE(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *GE
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "GE segment without GS segment",
 			state:    decodeState{},
 			elements: []string{"GE", "1", "95071"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrInvalidFormat,
 		},
 		{
 			name:     "too few elements",
 			state:    decodeState{currentFunctionGroup: &FunctionGroup{Header: &GS{}}},
 			elements: []string{"GE", "1"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "Typical segment",
 			state:    decodeState{currentFunctionGroup: &FunctionGroup{Header: &GS{}}},
 			elements: []string{"GE", "1", "95071"},
 			want:     &GE{NumberOfIncludedTransactionSets: "1", GroupControlNumber: "95071"},
-			wantErr:  false,
 		},
 		{
-
 			name:     "too many elements",
 			state:    decodeState{currentFunctionGroup: &FunctionGroup{Header: &GS{}}},
 			elements: []string{"GE", "1", "95071", "Hello", "World"},
 			want:     &GE{NumberOfIncludedTransactionSets: "1", GroupControlNumber: "95071"},
-			wantErr:  false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseGE(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseGE() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseGE(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseGE() error = %v, want %v", err, tt.wantErr)
 			}
-			if !tt.wantErr {
-				got := tt.state.currentFunctionGroup.Trailer
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("parseGE() got = %v, want %v", got, tt.want)
+			if tt.wantErr == nil {
+				if diff := cmp.Diff(tt.want, tt.state.currentFunctionGroup.Trailer); diff != "" {
+					t.Errorf("parseGE() mismatch (-want +got):\n%s", diff)
 				}
 			}
 		})
@@ -100,14 +98,14 @@ func Test_decodeState_parseGS(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *GS
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "too few elements",
 			state:    decodeState{doc: &X12Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
@@ -123,7 +121,6 @@ func Test_decodeState_parseGS(t *testing.T) {
 				ResponsibleAgencyCode:    "X",
 				VersionReleaseIndustryID: "005010",
 			},
-			wantErr: false,
 		},
 		{
 			name:     "too many elements",
@@ -139,17 +136,15 @@ func Test_decodeState_parseGS(t *testing.T) {
 				ResponsibleAgencyCode:    "X",
 				VersionReleaseIndustryID: "005010",
 			},
-			wantErr: false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseGS(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseGS() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseGS(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseGS() error = %v, want %v", err, tt.wantErr)
 			}
-			got := tt.state.currentFunctionGroup.Header
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseGS() got = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, tt.state.currentFunctionGroup.Header); diff != "" {
+				t.Errorf("parseGS() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -161,14 +156,14 @@ func Test_decodeState_parseIEA(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *IEA
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "too few elements",
 			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
 			elements: []string{"IEA", "1"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
@@ -178,7 +173,6 @@ func Test_decodeState_parseIEA(t *testing.T) {
 				NumberOfIncludedFunctionalGroups: "1",
 				InterchangeControlNumber:         "000095071",
 			},
-			wantErr: false,
 		},
 		{
 			name:     "too many elements",
@@ -188,17 +182,15 @@ func Test_decodeState_parseIEA(t *testing.T) {
 				NumberOfIncludedFunctionalGroups: "1",
 				InterchangeControlNumber:         "000095071",
 			},
-			wantErr: false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseIEA(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseIEA() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseIEA(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseIEA() error = %v, want %v", err, tt.wantErr)
 			}
-			got := tt.state.doc.Interchange.Trailer
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseIEA() got = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, tt.state.doc.Interchange.Trailer); diff != "" {
+				t.Errorf("parseIEA() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -210,14 +202,14 @@ func Test_decodeState_parseISA(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *ISA
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "too few elements",
 			state:    decodeState{doc: &X12Document{Interchange: &Interchange{}}},
 			elements: []string{"ISA", "00", "          ", "00", "          ", "08", "9254110060     ", "ZZ", "123456789      ", "041216", "0805", "U", "00501", "000095071", "0", "P"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
@@ -241,7 +233,6 @@ func Test_decodeState_parseISA(t *testing.T) {
 				UsageIndicator:                 "P",
 				ComponentElementSeparator:      ">",
 			},
-			wantErr: false,
 		},
 		{
 			name:     "too many elements",
@@ -265,17 +256,15 @@ func Test_decodeState_parseISA(t *testing.T) {
 				UsageIndicator:                 "P",
 				ComponentElementSeparator:      ">",
 			},
-			wantErr: false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseISA(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseISA() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseISA(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseISA() error = %v, want %v", err, tt.wantErr)
 			}
-			got := tt.state.doc.Interchange.Header
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseISA() got = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, tt.state.doc.Interchange.Header); diff != "" {
+				t.Errorf("parseISA() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -287,46 +276,43 @@ func Test_decodeState_parseSE(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *SE
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "SE segment without ST segment",
 			state:    decodeState{},
 			elements: []string{},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrInvalidFormat,
 		},
 		{
 			name:     "too few elements",
 			state:    decodeState{currentTransaction: &Transaction{}},
 			elements: []string{"SE", "7"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
 			state:    decodeState{currentTransaction: &Transaction{}},
 			elements: []string{"SE", "7", "021390001"},
 			want:     &SE{NumberOfIncludedSegments: "7", TransactionSetControlNumber: "021390001"},
-			wantErr:  false,
 		},
 		{
 			name:     "too many elements",
 			state:    decodeState{currentTransaction: &Transaction{}},
 			elements: []string{"SE", "7", "021390001", "Hello", "World!"},
 			want:     &SE{NumberOfIncludedSegments: "7", TransactionSetControlNumber: "021390001"},
-			wantErr:  false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseSE(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseSE() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseSE(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseSE() error = %v, want %v", err, tt.wantErr)
 			}
-			if !tt.wantErr {
-				got := tt.state.currentTransaction.Trailer
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("parseSE() got = %v, want %v", got, tt.want)
+			if tt.wantErr == nil {
+				if diff := cmp.Diff(tt.want, tt.state.currentTransaction.Trailer); diff != "" {
+					t.Errorf("parseSE() mismatch (-want +got):\n%s", diff)
 				}
 			}
 		})
@@ -339,21 +325,21 @@ func Test_decodeState_parseST(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     *ST
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "too few elements",
 			state:    decodeState{currentTransaction: &Transaction{}},
 			elements: []string{"ST", "824"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "ST segment without GS segment",
 			state:    decodeState{currentTransaction: &Transaction{}},
 			elements: []string{"ST", "824", "021390001", "005010X186A1"},
 			want:     nil,
-			wantErr:  true,
+			wantErr:  ErrInvalidFormat,
 		},
 		{
 			name:     "typical segment",
@@ -364,7 +350,6 @@ func Test_decodeState_parseST(t *testing.T) {
 				TransactionSetControlNumber:       "021390001",
 				ImplementationConventionReference: "005010X186A1",
 			},
-			wantErr: false,
 		},
 		{
 			name:     "two element segment",
@@ -374,7 +359,6 @@ func Test_decodeState_parseST(t *testing.T) {
 				TransactionSetIDCode:        "824",
 				TransactionSetControlNumber: "021390001",
 			},
-			wantErr: false,
 		},
 		{
 			name:     "too many elements",
@@ -385,17 +369,15 @@ func Test_decodeState_parseST(t *testing.T) {
 				TransactionSetControlNumber:       "021390001",
 				ImplementationConventionReference: "005010X186A1",
 			},
-			wantErr: false, // should this case return an error?
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseST(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseST() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseST(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseST() error = %v, want %v", err, tt.wantErr)
 			}
-			got := tt.state.currentTransaction.Header
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseST() got = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, tt.state.currentTransaction.Header); diff != "" {
+				t.Errorf("parseST() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -407,14 +389,14 @@ func Test_decodeState_parseSegment(t *testing.T) {
 		state    decodeState
 		elements []string
 		want     []Segment
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "default segment without ST segment",
 			state:    decodeState{},
 			elements: []string{"DEF", "1", "2", "3"},
 			want:     []Segment{},
-			wantErr:  true,
+			wantErr:  ErrInvalidFormat,
 		},
 		{
 			name:     "typical segment",
@@ -428,7 +410,6 @@ func Test_decodeState_parseSegment(t *testing.T) {
 					{ID: "03", Value: "3"},
 				}},
 			},
-			wantErr: false,
 		},
 		{
 			name:     "id only segment",
@@ -438,19 +419,16 @@ func Test_decodeState_parseSegment(t *testing.T) {
 				ID:       "DEF",
 				Elements: []Element{}},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.state.parseSegment(tt.elements); (err != nil) != tt.wantErr {
-				t.Errorf("parseSegment() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.parseSegment(tt.elements); !errors.Is(err, tt.wantErr) {
+				t.Errorf("parseSegment() error = %v, want %v", err, tt.wantErr)
 			}
-
-			if !tt.wantErr {
-				got := tt.state.currentTransaction.Segments
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("parseSegment() got = %v, want %v", got, tt.want)
+			if tt.wantErr == nil {
+				if diff := cmp.Diff(tt.want, tt.state.currentTransaction.Segments); diff != "" {
+					t.Errorf("parseSegment() mismatch (-want +got):\n%s", diff)
 				}
 			}
 		})
@@ -462,33 +440,30 @@ func Test_decodeState_processLine(t *testing.T) {
 		name    string
 		state   decodeState
 		line    string
-		wantErr bool
+		wantErr error
 	}{
 		{
-			name:    "Typical Line",
-			state:   decodeState{currentTransaction: &Transaction{}},
-			line:    "DEF 1 2 3",
-			wantErr: false,
+			name:  "Typical Line",
+			state: decodeState{currentTransaction: &Transaction{}},
+			line:  "DEF 1 2 3",
 		},
 		{
-			name:    "Empty Line",
-			state:   decodeState{},
-			line:    "",
-			wantErr: false,
+			name:  "Empty Line",
+			state: decodeState{},
+			line:  "",
 		},
 		{
-			name:    "Whitespace only",
-			state:   decodeState{currentTransaction: &Transaction{}},
-			line:    " ",
-			wantErr: false,
+			name:  "Whitespace only",
+			state: decodeState{currentTransaction: &Transaction{}},
+			line:  " ",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parsers := tt.state.getSegmentParsers()
-			if err := tt.state.processLine(tt.line, parsers); (err != nil) != tt.wantErr {
-				t.Errorf("processLine() error = %v, wantErr %v", err, tt.wantErr)
+			if err := tt.state.processLine(tt.line, parsers); !errors.Is(err, tt.wantErr) {
+				t.Errorf("processLine() error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -530,8 +505,8 @@ func Test_parseElements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := parseElements(tt.elements); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseElements() = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, parseElements(tt.elements)); diff != "" {
+				t.Errorf("parseElements() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -542,7 +517,7 @@ func Test_scanEDI(t *testing.T) {
 		name    string
 		input   string
 		want    []string
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:  "Two Complete Segments",
@@ -570,11 +545,11 @@ func Test_scanEDI(t *testing.T) {
 				segments = append(segments, scanner.Text())
 			}
 
-			if err := scanner.Err(); (err != nil) != tt.wantErr {
-				t.Errorf("scanEDI() error = %v, wantErr %v", err, tt.wantErr)
+			if err := scanner.Err(); !errors.Is(err, tt.wantErr) {
+				t.Errorf("scanEDI() error = %v, want %v", err, tt.wantErr)
 			}
-			if !reflect.DeepEqual(segments, tt.want) {
-				t.Errorf("scanEDI() = %v, want %v", segments, tt.want)
+			if diff := cmp.Diff(tt.want, segments); diff != "" {
+				t.Errorf("scanEDI() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

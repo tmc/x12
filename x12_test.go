@@ -1,6 +1,7 @@
 package x12_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,7 +19,7 @@ func TestDecode(t *testing.T) {
 		name    string
 		input   string
 		want    *x12.X12Document
-		wantErr bool
+		wantErr error
 
 		validateResult string
 	}{
@@ -149,7 +150,7 @@ SE*7*021390001~
 GE*1*95071~
 IEA*1*000095071~`,
 			want:           nil,
-			wantErr:        true,
+			wantErr:        x12.ErrMissingElement,
 			validateResult: "<nil>",
 		},
 	}
@@ -157,11 +158,10 @@ IEA*1*000095071~`,
 		t.Run(tt.name, func(t *testing.T) {
 			r := strings.NewReader(tt.input)
 			got, err := x12.Decode(r)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Decode() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Decode() error = %v, want %v", err, tt.wantErr)
 			}
-			if (err != nil) == tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
@@ -257,22 +257,125 @@ func normalizeLineEndings(input string) string {
 	return strings.ReplaceAll(input, "\r\n", "\n")
 }
 
-func TestMarshalNilInterchangeDoesNotPanic(t *testing.T) {
-	// Regression: a document decoded from input lacking an ISA envelope (e.g.
-	// beginning with GS) leaves Interchange.Header nil; Marshal must return an
-	// error instead of panicking. See github.com/tmc/x12/issues/9.
-	in := "GS*HC*SENDER*RECEIVER*20260101*1200*1*X*005010~ST*837*0001~SE*1*0001~GE*1*1~"
-	doc, err := x12.Decode(strings.NewReader(in))
+func TestDecodeRelaxedSegmentIDWhitespace(t *testing.T) {
+	// Modeled on the x12.org 005010x221 examples, which pad each ISA
+	// element (including the segment ID) with trailing whitespace.
+	const input = `ISA *00 *          *00 *          *ZZ *SENDER         *ZZ *RECEIVER       *190827 *0212 *^ *00501 *191511902 *0 *P *>~
+GS*HP*SENDER*RECEIVER*20190827*0212*1*X*005010X221A1~
+ST*835*0001~
+BPR*I*11.06*C*CHK~
+SE*3*0001~
+GE*1*1~
+IEA*1*191511902~`
+
+	if _, err := x12.Decode(strings.NewReader(input)); !errors.Is(err, x12.ErrInvalidFormat) {
+		t.Fatalf("Decode() without option: error = %v, want ErrInvalidFormat", err)
+	}
+	doc, err := x12.Decode(strings.NewReader(input), x12.WithRelaxedSegmentIDWhitespace())
 	if err != nil {
-		t.Fatalf("Decode() error = %v", err)
+		t.Fatalf("Decode() with option: %v", err)
 	}
-
-	if _, err := (&x12.Marshaler{}).Marshal(doc); err == nil {
-		t.Fatal("Marshal() of a document with a nil ISA header: got nil error, want error")
+	if got, want := doc.Interchange.Header.InterchangeControlStandardsID, "^ "; got != want {
+		t.Errorf("ISA11 = %q, want %q", got, want)
 	}
+	if got, want := doc.Interchange.Header.InterchangeControlNumber, "191511902 "; got != want {
+		t.Errorf("ISA13 = %q, want %q", got, want)
+	}
+}
 
-	// A nil document and a document with a nil Interchange must also be safe.
-	if _, err := (&x12.Marshaler{}).Marshal(&x12.X12Document{}); err == nil {
-		t.Fatal("Marshal() of a document with a nil Interchange: got nil error, want error")
+func TestDecodeAutomaticEnvelope(t *testing.T) {
+	const input = `ST*837*0001~NM1*41*2*PREMIER BILLING SERVICE~SE*3*0001~`
+	doc, err := x12.Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if !doc.EnvelopeAutomaticallyAdded {
+		t.Error("EnvelopeAutomaticallyAdded = false, want true")
+	}
+	if got := len(doc.Interchange.FunctionGroups); got != 1 {
+		t.Fatalf("len(FunctionGroups) = %d, want 1", got)
+	}
+	if got := len(doc.Interchange.FunctionGroups[0].Transactions); got != 1 {
+		t.Fatalf("len(Transactions) = %d, want 1", got)
+	}
+	if err := doc.Validate(); err != nil {
+		t.Errorf("Validate() = %v", err)
+	}
+	// Marshaling an automatically enveloped document emits only ST..SE.
+	b, err := (&x12.Marshaler{}).Marshal(doc)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if diff := cmp.Diff(input, string(b)); diff != "" {
+		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMarshalHandBuilt(t *testing.T) {
+	doc := &x12.X12Document{
+		Interchange: &x12.Interchange{
+			Header: &x12.ISA{
+				AuthorizationInfoQualifier:     "00",
+				AuthorizationInformation:       "          ",
+				SecurityInfoQualifier:          "00",
+				SecurityInfo:                   "          ",
+				InterchangeSenderIDQualifier:   "ZZ",
+				InterchangeSenderID:            "SENDER         ",
+				InterchangeReceiverIDQualifier: "ZZ",
+				InterchangeReceiverID:          "RECEIVER       ",
+				InterchangeDate:                "230101",
+				InterchangeTime:                "1200",
+				InterchangeControlStandardsID:  "^",
+				InterchangeControlVersion:      "00501",
+				InterchangeControlNumber:       "000000001",
+				AcknowledgmentRequested:        "0",
+				UsageIndicator:                 "T",
+				ComponentElementSeparator:      ":",
+			},
+			FunctionGroups: []*x12.FunctionGroup{{
+				Header: &x12.GS{
+					FunctionalIDCode:         "HC",
+					ApplicationSenderCode:    "SENDER",
+					ApplicationReceiverCode:  "RECEIVER",
+					Date:                     "20230101",
+					Time:                     "1200",
+					GroupControlNumber:       "1",
+					ResponsibleAgencyCode:    "X",
+					VersionReleaseIndustryID: "005010X222A1",
+				},
+				Transactions: []*x12.Transaction{{
+					Header: &x12.ST{TransactionSetIDCode: "837", TransactionSetControlNumber: "0001"},
+					Segments: []x12.Segment{
+						{ID: "BHT", Elements: []x12.Element{{Value: "0019"}, {Value: "00"}}},
+						{ID: "HI", Elements: []x12.Element{{Value: "BK", Components: []string{"8901"}}}},
+					},
+					Trailer: &x12.SE{NumberOfIncludedSegments: "4", TransactionSetControlNumber: "0001"},
+				}},
+				Trailer: &x12.GE{NumberOfIncludedTransactionSets: "1", GroupControlNumber: "1"},
+			}},
+			Trailer: &x12.IEA{NumberOfIncludedFunctionalGroups: "1", InterchangeControlNumber: "000000001"},
+		},
+	}
+	const want = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*000000001*0*T*:~` +
+		`GS*HC*SENDER*RECEIVER*20230101*1200*1*X*005010X222A1~` +
+		`ST*837*0001~` +
+		`BHT*0019*00~` +
+		`HI*BK:8901~` +
+		`SE*4*0001~` +
+		`GE*1*1~` +
+		`IEA*1*000000001~`
+	b, err := (&x12.Marshaler{}).Marshal(doc)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if diff := cmp.Diff(want, string(b)); diff != "" {
+		t.Errorf("Marshal() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMarshalAutomaticEnvelopeGuard(t *testing.T) {
+	doc := &x12.X12Document{EnvelopeAutomaticallyAdded: true, Interchange: &x12.Interchange{}}
+	if _, err := (&x12.Marshaler{}).Marshal(doc); !errors.Is(err, x12.ErrInvalidArgument) {
+		t.Errorf("Marshal() error = %v, want ErrInvalidArgument", err)
 	}
 }
