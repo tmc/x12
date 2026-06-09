@@ -18,22 +18,16 @@ func (m *Marshaler) Marshal(x *X12Document) ([]byte, error) {
 		return nil, fmt.Errorf("%w: x nil", ErrInvalidArgument)
 	}
 	if x.Interchange == nil {
-		return nil, fmt.Errorf("%w: missing interchange", ErrInvalidFormat)
+		return nil, fmt.Errorf("%w: missing interchange", ErrInvalidArgument)
 	}
 	builder := strings.Builder{}
 	if !x.EnvelopeAutomaticallyAdded {
-		if x.Interchange.Header == nil {
-			return nil, fmt.Errorf("%w: ISA segment missing", ErrInvalidFormat)
-		}
-		if x.Interchange.Trailer == nil {
-			return nil, fmt.Errorf("%w: IEA segment missing", ErrInvalidFormat)
-		}
 		m.encodeISA(x.Interchange.Header, &builder)
 		m.encodeFunctionGroups(x.Interchange.FunctionGroups, &builder)
 		m.encodeIEA(x.Interchange.Trailer, &builder)
 	} else {
-		if len(x.Interchange.FunctionGroups) == 0 || len(x.Interchange.FunctionGroups[0].Transactions) == 0 {
-			return nil, fmt.Errorf("%w: auto-enveloped document missing function group or transaction", ErrInvalidFormat)
+		if len(x.Interchange.FunctionGroups) != 1 || len(x.Interchange.FunctionGroups[0].Transactions) != 1 {
+			return nil, fmt.Errorf("%w: automatically enveloped document must contain exactly one function group with one transaction", ErrInvalidArgument)
 		}
 		fg := x.Interchange.FunctionGroups[0]
 		transaction := fg.Transactions[0]
