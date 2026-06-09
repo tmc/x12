@@ -460,6 +460,9 @@ func (s *decodeState) parseGE(elements []string) error {
 	if s.currentFunctionGroup == nil {
 		return s.parseErrorf("GE", 0, "%w: GE segment without GS segment", ErrInvalidFormat)
 	}
+	if s.strictSegments && s.currentFunctionGroup.Trailer != nil && !s.doc.EnvelopeAutomaticallyAdded {
+		return s.parseErrorf("GE", 0, "%w: duplicate GE segment", ErrInvalidFormat)
+	}
 	if len(elements) < 3 {
 		return s.parseErrorf("GE", len(elements), "%w", ErrMissingElement)
 	}
@@ -500,6 +503,9 @@ func (s *decodeState) parseST(elements []string) error {
 func (s *decodeState) parseSE(elements []string) error {
 	if s.currentTransaction == nil {
 		return s.parseErrorf("SE", 0, "%w: SE segment without ST segment", ErrInvalidFormat)
+	}
+	if s.strictSegments && s.currentTransaction.Trailer != nil {
+		return s.parseErrorf("SE", 0, "%w: duplicate SE segment", ErrInvalidFormat)
 	}
 	if len(elements) < 3 {
 		return s.parseErrorf("SE", len(elements), "%w", ErrMissingElement)

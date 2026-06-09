@@ -531,6 +531,17 @@ func TestDecodeStrictSegments(t *testing.T) {
 			name:  "segment after SE trailer",
 			input: `ST*837*0001~NM1*41*2*ACME~SE*3*0001~REF*EV*X~`,
 		},
+		{
+			name:  "duplicate SE",
+			input: `ST*837*0001~NM1*41*2*ACME~SE*3*0001~SE*3*0001~`,
+		},
+		{
+			name: "duplicate GE",
+			input: `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*^*00501*000000001*0*P*:~` +
+				`GS*HC*SENDER*RECEIVER*20230101*1200*1*X*005010~` +
+				`ST*837*0001~NM1*41*2*ACME~SE*3*0001~` +
+				`GE*1*1~GE*1*1~IEA*1*000000001~`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
