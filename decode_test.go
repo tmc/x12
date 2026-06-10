@@ -101,15 +101,22 @@ func Test_decodeState_parseGS(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name:     "too few elements",
+			name:     "no ISA segment",
 			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X", "005010"},
+			want:     nil,
+			wantErr:  ErrInvalidFormat,
+		},
+		{
+			name:     "too few elements",
+			state:    decodeState{doc: &Document{Interchange: &Interchange{Header: &ISA{}, FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X"},
 			want:     nil,
 			wantErr:  ErrMissingElement,
 		},
 		{
 			name:     "typical segment",
-			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{Header: &ISA{}, FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X", "005010"},
 			want: &GS{
 				FunctionalIDCode:      "AG",
@@ -124,7 +131,7 @@ func Test_decodeState_parseGS(t *testing.T) {
 		},
 		{
 			name:     "too many elements",
-			state:    decodeState{doc: &Document{Interchange: &Interchange{FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
+			state:    decodeState{doc: &Document{Interchange: &Interchange{Header: &ISA{}, FunctionGroups: []*FunctionGroup{}}}, currentFunctionGroup: &FunctionGroup{}},
 			elements: []string{"GS", "AG", "5137624388", "123456789", "20041216", "0805", "95071", "X", "005010", "Hello", "World!"},
 			want: &GS{
 				FunctionalIDCode:      "AG",

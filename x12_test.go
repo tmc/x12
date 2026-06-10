@@ -586,6 +586,21 @@ func TestDecodeRejectsMultipleInterchanges(t *testing.T) {
 	}
 }
 
+func TestDecodeRejectsGSWithoutISA(t *testing.T) {
+	// A GS segment before any ISA used to decode into a document with a
+	// nil interchange header, surfacing only in Validate.
+	const input = `GS*HC*SENDER*RECEIVER*20230101*1200*1*X*005010~` +
+		`ST*837*0001~NM1*41*2*ACME~SE*3*0001~GE*1*1~`
+	_, err := x12.Decode(strings.NewReader(input))
+	if !errors.Is(err, x12.ErrInvalidFormat) {
+		t.Errorf("Decode() error = %v, want ErrInvalidFormat", err)
+	}
+	var pe *x12.ParseError
+	if !errors.As(err, &pe) || pe.SegmentID != "GS" || pe.Segment != 1 {
+		t.Errorf("Decode() error = %+v, want *ParseError{SegmentID: GS, Segment: 1}", err)
+	}
+}
+
 func TestDecodeAutomaticEnvelopeSingleTransaction(t *testing.T) {
 	// The synthesized envelope declares exactly one transaction set, so
 	// envelope-less input with a second ST must be rejected rather than
