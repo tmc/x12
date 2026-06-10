@@ -50,6 +50,7 @@ type decodeState struct {
 
 	withRelaxedSegmentIDWhitespace bool
 	strictSegments                 bool
+	maxSegmentSize                 int
 }
 
 // DecodeOption is a function that can be used to configure the decoder.
@@ -70,6 +71,18 @@ func WithRelaxedSegmentIDWhitespace() DecodeOption {
 func WithStrictSegments() DecodeOption {
 	return func(state *decodeState) {
 		state.strictSegments = true
+	}
+}
+
+// WithMaxSegmentSize sets the largest single segment, in bytes, that
+// the decoder accepts, overriding the default of 1MB. A non-positive
+// value is ignored. Exceeding the limit surfaces as a wrapped
+// bufio.ErrTooLong.
+func WithMaxSegmentSize(n int) DecodeOption {
+	return func(state *decodeState) {
+		if n > 0 {
+			state.maxSegmentSize = n
+		}
 	}
 }
 
@@ -111,7 +124,7 @@ func (dec *Decoder) Decode() (*Document, error) {
 	}
 
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(nil, maxSegmentSize)
+	scanner.Buffer(nil, state.maxSegmentSize)
 	scanner.Split(scanSegments(term))
 	for scanner.Scan() {
 		if err := state.processLine(scanner.Text(), segmentParsers); err != nil {
@@ -142,6 +155,7 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 			Interchange: &Interchange{},
 		},
 		elementSeparator: DefaultElementSeparator,
+		maxSegmentSize:   defaultMaxSegmentSize,
 	}
 	for _, opt := range opts {
 		opt(state)
@@ -153,10 +167,11 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 // including the segment terminator.
 const isaLen = 106
 
-// maxSegmentSize bounds a single segment. A segment this large almost
-// always means the segment terminator was wrong, not that the data is
-// real; exceeding it surfaces as a wrapped bufio.ErrTooLong.
-const maxSegmentSize = 1 << 20
+// defaultMaxSegmentSize bounds a single segment unless overridden by
+// WithMaxSegmentSize. A segment this large almost always means the
+// segment terminator was wrong, not that the data is real; exceeding
+// the bound surfaces as a wrapped bufio.ErrTooLong.
+const defaultMaxSegmentSize = 1 << 20
 
 // isaSeparatorOffsets are the byte offsets of the element separators in
 // a canonical fixed-width ISA segment. ISA16 occupies the byte before

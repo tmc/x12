@@ -647,8 +647,9 @@ func TestDecodeLeadingTerminator(t *testing.T) {
 
 func TestDecodeLargeSegment(t *testing.T) {
 	// Segments over bufio.Scanner's 64KB default must still decode; ones
-	// over the package's 1MB bound must fail with a wrapped, identifiable
-	// error rather than a bare scanner error.
+	// over the default 1MB bound must fail with a wrapped, identifiable
+	// error rather than a bare scanner error, unless the bound is raised
+	// with WithMaxSegmentSize.
 	build := func(n int) string {
 		return `ST*837*0001~NM1*41*2*` + strings.Repeat("A", n) + `~SE*3*0001~`
 	}
@@ -658,6 +659,13 @@ func TestDecodeLargeSegment(t *testing.T) {
 	_, err := x12.Decode(strings.NewReader(build(2 << 20)))
 	if !errors.Is(err, bufio.ErrTooLong) {
 		t.Errorf("Decode(2MB segment) error = %v, want bufio.ErrTooLong", err)
+	}
+	if _, err := x12.Decode(strings.NewReader(build(2<<20)), x12.WithMaxSegmentSize(4<<20)); err != nil {
+		t.Errorf("Decode(2MB segment, 4MB limit) = %v, want nil", err)
+	}
+	_, err = x12.Decode(strings.NewReader(build(2<<20)), x12.WithMaxSegmentSize(-1))
+	if !errors.Is(err, bufio.ErrTooLong) {
+		t.Errorf("Decode(2MB segment, ignored non-positive limit) error = %v, want bufio.ErrTooLong", err)
 	}
 }
 
