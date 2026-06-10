@@ -32,7 +32,13 @@ type decodeState struct {
 	currentTransaction   *Transaction
 
 	withRelaxedSegmentIDWhitespace bool
+	maxSegmentSize                 int
 }
+
+// defaultMaxSegmentSize is the largest single segment, in bytes, that Decode
+// accepts by default. It is far above bufio.MaxScanTokenSize (64 KB) so that
+// large free-text or binary segments decode without configuration.
+const defaultMaxSegmentSize = 16 * 1024 * 1024
 
 // DecodeOption is a function that can be used to configure the decoder.
 type DecodeOption func(*decodeState)
@@ -44,12 +50,24 @@ func WithRelaxedSegmentIDWhitespace() DecodeOption {
 	}
 }
 
+// WithMaxSegmentSize sets the largest single segment, in bytes, that the
+// decoder accepts. It overrides the default of 16 MiB. A non-positive value is
+// ignored.
+func WithMaxSegmentSize(n int) DecodeOption {
+	return func(state *decodeState) {
+		if n > 0 {
+			state.maxSegmentSize = n
+		}
+	}
+}
+
 // Decode decodes an X12 document from an io.Reader
 func Decode(in io.Reader, opts ...DecodeOption) (*X12Document, error) {
 	state := initializeDecodeState(opts)
 	segmentParsers := state.getSegmentParsers()
 
 	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), state.maxSegmentSize)
 	scanner.Split(scanEDI)
 	for scanner.Scan() {
 		if err := state.processLine(scanner.Text(), segmentParsers); err != nil {
@@ -71,6 +89,7 @@ func initializeDecodeState(opts []DecodeOption) *decodeState {
 		lineIndex:            0,
 		currentFunctionGroup: nil,
 		currentTransaction:   nil,
+		maxSegmentSize:       defaultMaxSegmentSize,
 	}
 	for _, opt := range opts {
 		opt(state)
